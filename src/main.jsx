@@ -6,6 +6,7 @@ import App from './App.jsx'
 import { AuthProvider } from './context/AuthContext.jsx'
 import { iniciarDatos, iniciarSincronizacion, refrescar } from './data/store'
 import { registrarServiceWorker } from './utils/notificaciones'
+import { buscarVersionNueva } from './utils/actualizacion'
 
 const raiz = createRoot(document.getElementById('root'))
 raiz.render(
@@ -28,10 +29,18 @@ iniciarDatos().then(() => {
   )
 })
 
-// Al volver a la pestaña se actualizan los datos por si alguien más hizo cambios
-document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible') refrescar()
-})
+// Al volver a la app (celulares: se pausa en segundo plano) se actualizan los datos
+// y se comprueba si hay una versión nueva publicada.
+function alVolver() {
+  if (document.visibilityState === 'hidden') return
+  refrescar()
+  buscarVersionNueva()
+}
+document.addEventListener('visibilitychange', alVolver)
+window.addEventListener('focus', alVolver)
+window.addEventListener('pageshow', alVolver)
+window.addEventListener('online', alVolver)
+buscarVersionNueva()
 
 // Service worker: necesario para recibir notificaciones
 registrarServiceWorker()

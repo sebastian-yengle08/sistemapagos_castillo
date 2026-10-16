@@ -92,11 +92,16 @@ export async function guardarSuscripcion(sub, perfil) {
   if (error) throw new Error(`suscripciones: ${error.message}`)
 }
 
+let canalTiempoReal = null
+
 /** Avisa (callback) cada vez que alguien cambia datos en Supabase, desde cualquier dispositivo. */
 export function suscribirCambios(alCambiar) {
-  if (!nube) return () => {}
-  let canal = nube.channel('pagos-castillo-cambios')
+  if (!nube) return
+  // Si ya hay una conexión viva no se repite; si se cayó, se crea de nuevo
+  if (canalTiempoReal && canalTiempoReal.state === 'joined') return
+  if (canalTiempoReal) nube.removeChannel(canalTiempoReal)
+  let canal = nube.channel(`pagos-castillo-cambios-${Date.now()}`)
   for (const t of TABLAS) canal = canal.on('postgres_changes', { event: '*', schema: 'public', table: t }, alCambiar)
   canal.subscribe()
-  return () => nube.removeChannel(canal)
+  canalTiempoReal = canal
 }

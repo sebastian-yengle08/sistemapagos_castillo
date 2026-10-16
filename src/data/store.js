@@ -93,18 +93,23 @@ export function refrescar() {
 
 /**
  * Mantiene todos los dispositivos al día: Supabase Realtime avisa al instante y, por si el
- * tiempo real no estuviera activado, se vuelve a leer cada 10 segundos mientras la app se ve.
+ * tiempo real no estuviera activado, se vuelve a leer cada 5 segundos mientras la app se ve.
  */
 export function iniciarSincronizacion() {
   if (!usaNube) return
   let espera
-  suscribirCambios(() => {
+  const alCambiar = () => {
     clearTimeout(espera)
     espera = setTimeout(refrescar, 250)
+  }
+  suscribirCambios(alCambiar)
+  // En celulares la conexión de tiempo real se corta al pausar la app: se reabre al volver
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') suscribirCambios(alCambiar)
   })
   setInterval(() => {
     if (document.visibilityState === 'visible') refrescar()
-  }, 10000)
+  }, 5000)
 }
 
 function publicar(nuevo) {
