@@ -22,12 +22,12 @@ const MENU = {
 
 function Logo({ chico }) {
   return (
-    <Link to="/" className="flex items-center gap-3" aria-label="Pagos Castillo, ir al calendario">
+    <Link to="/" className="flex items-center gap-2 sm:gap-3" aria-label="Pagos Castillo, ir al calendario">
       <span className={`grid place-items-center rounded-xl bg-brand text-white ${chico ? 'h-9 w-9' : 'h-11 w-11'}`}>
         <Building2 size={chico ? 20 : 24} aria-hidden="true" />
       </span>
       <span className="leading-tight">
-        <span className="block text-xl font-bold text-brand">Pagos Castillo</span>
+        <span className={`block whitespace-nowrap font-bold text-brand ${chico ? "text-lg" : "text-xl"}`}>Pagos Castillo</span>
         {!chico && <span className="block text-sm text-suave">Empresa Castillo</span>}
       </span>
     </Link>
@@ -73,7 +73,7 @@ export default function Layout() {
       </aside>
 
       {/* Barra superior */}
-      <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-borde bg-white/95 px-4 backdrop-blur lg:px-8">
+      <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-borde bg-white/95 px-3 backdrop-blur sm:px-4 lg:px-8">
         <div className="lg:hidden">
           <Logo chico />
         </div>
@@ -81,13 +81,13 @@ export default function Layout() {
           Hola, <span className="font-bold text-tinta">{nombre}</span>
         </p>
         <div className="flex items-center gap-2">
-          <Link to="/avisos" aria-label={`Avisos: ${avisos}`} className="relative grid h-12 w-12 place-items-center rounded-full text-slate-600 hover:bg-slate-100">
+          <Link to="/avisos" aria-label={`Avisos: ${avisos}`} className="relative grid h-11 w-11 place-items-center rounded-full sm:h-12 sm:w-12 text-slate-600 hover:bg-slate-100">
             <Bell size={24} aria-hidden="true" />
             {avisos > 0 && (
               <span className="absolute right-1 top-1 grid min-w-5 place-items-center rounded-full bg-venc-tx px-1 text-xs font-bold leading-5 text-white">{avisos}</span>
             )}
           </Link>
-          <button type="button" onClick={bloquear} className="flex min-h-12 items-center gap-2 rounded-xl border-[1.5px] border-borde px-4 font-semibold hover:bg-slate-50">
+          <button type="button" onClick={bloquear} className="flex min-h-12 items-center gap-2 rounded-xl border-[1.5px] border-borde px-3 font-semibold hover:bg-slate-50 sm:px-4">
             <Lock size={18} aria-hidden="true" /> Bloquear
           </button>
         </div>

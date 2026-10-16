@@ -97,7 +97,7 @@ export default function CalendarioPage() {
   )
 
   return (
-    <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
       <div className="min-w-0">
         {/* Navegación de mes */}
         <div className="flex items-center justify-between gap-2">
