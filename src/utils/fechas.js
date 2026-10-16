@@ -1,6 +1,6 @@
 // Fechas como texto "aaaa-mm-dd" tratadas como fecha LOCAL (Lima). Nunca se usa
 // new Date("aaaa-mm-dd") porque eso interpreta UTC y puede correr un día.
-import { ZONA } from '../config/constantes'
+import { ZONA } from '../config/constantes.js'
 
 const pad = (n) => String(n).padStart(2, '0')
 

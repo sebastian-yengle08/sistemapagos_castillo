@@ -1,4 +1,4 @@
-import { diasEntre, partes } from './fechas'
+import { diasEntre, partes } from './fechas.js'
 
 /**
  * Agrupa los recibos no pagados en los avisos. Cada recibo cae en UN solo grupo,

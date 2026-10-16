@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import { useDatos } from '../data/useDatos'
 import { agruparAvisos } from '../utils/avisos'
 import { hoyISO } from '../utils/fechas'
+import ActivarAvisos from './ActivarAvisos'
 
 const MENU = {
   asistente: [
@@ -87,11 +88,13 @@ export default function Layout() {
               <span className="absolute right-1 top-1 grid min-w-5 place-items-center rounded-full bg-venc-tx px-1 text-xs font-bold leading-5 text-white">{avisos}</span>
             )}
           </Link>
-          <button type="button" onClick={bloquear} className="flex min-h-12 items-center gap-2 rounded-xl border-[1.5px] border-borde px-3 font-semibold hover:bg-slate-50 sm:px-4">
-            <Lock size={18} aria-hidden="true" /> Bloquear
+          <button type="button" onClick={bloquear} aria-label="Bloquear" className="flex min-h-12 items-center gap-2 rounded-xl border-[1.5px] border-borde px-3 font-semibold hover:bg-slate-50 sm:px-4">
+            <Lock size={18} aria-hidden="true" /> <span className="hidden min-[400px]:inline">Bloquear</span>
           </button>
         </div>
       </header>
+
+      <ActivarAvisos />
 
       <main key={pathname} className="mx-auto max-w-[1280px] px-4 pb-28 pt-5 lg:px-8 lg:pb-10 lg:pt-8">
         <Outlet />

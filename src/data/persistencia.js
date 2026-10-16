@@ -79,3 +79,15 @@ export async function sincronizarNube(previo, nuevo) {
     }
   }
 }
+
+/** Guarda (o actualiza) la suscripción de notificaciones de un dispositivo. */
+export async function guardarSuscripcion(sub, perfil) {
+  if (!nube) return
+  const { error } = await nube.from('suscripciones').upsert({
+    endpoint: sub.endpoint,
+    p256dh: sub.keys.p256dh,
+    auth: sub.keys.auth,
+    perfil: perfil === 'gerente' ? 'Gerente' : 'Asistente',
+  })
+  if (error) throw new Error(`suscripciones: ${error.message}`)
+}

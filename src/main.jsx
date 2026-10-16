@@ -5,6 +5,7 @@ import './index.css'
 import App from './App.jsx'
 import { AuthProvider } from './context/AuthContext.jsx'
 import { iniciarDatos, refrescar } from './data/store'
+import { registrarServiceWorker } from './utils/notificaciones'
 
 const raiz = createRoot(document.getElementById('root'))
 raiz.render(
@@ -30,3 +31,6 @@ iniciarDatos().then(() => {
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') refrescar()
 })
+
+// Service worker: necesario para recibir notificaciones
+registrarServiceWorker()

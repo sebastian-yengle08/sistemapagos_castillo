@@ -51,3 +51,15 @@ drop policy if exists "prototipo historial" on public.historial;
 create policy "prototipo prestamos" on public.prestamos for all to anon using (true) with check (true);
 create policy "prototipo recibos"   on public.recibos   for all to anon using (true) with check (true);
 create policy "prototipo historial" on public.historial for all to anon using (true) with check (true);
+
+-- Dispositivos que activaron las notificaciones (una fila por navegador/celular)
+create table if not exists public.suscripciones (
+  endpoint   text primary key,
+  p256dh     text not null,
+  auth       text not null,
+  perfil     text not null,
+  creado_en  timestamptz not null default now()
+);
+alter table public.suscripciones enable row level security;
+drop policy if exists "prototipo suscripciones" on public.suscripciones;
+create policy "prototipo suscripciones" on public.suscripciones for all to anon using (true) with check (true);

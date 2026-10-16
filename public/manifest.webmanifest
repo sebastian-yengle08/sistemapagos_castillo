@@ -1,0 +1,15 @@
+{
+  "name": "Pagos Castillo",
+  "short_name": "Pagos Castillo",
+  "description": "Gestión de pagos de la empresa Castillo",
+  "lang": "es-PE",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#F6F8FB",
+  "theme_color": "#1F4E8C",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
