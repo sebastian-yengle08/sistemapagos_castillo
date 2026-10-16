@@ -294,6 +294,7 @@ export function calcularCuotas({ numCuotas, montoCuota, primeraFecha }) {
 
 /** datos: { entidad, montoTotal, numCuotas, montoCuota, primeraFecha } */
 export function crearPrestamo(datos) {
+  if (actor !== 'asistente') return null // los préstamos los gestiona el asistente
   const correlativo = estado.prestamos.length + 1
   const codigoBase = `PRE-${String(correlativo).padStart(4, '0')}`
   const prestamo = {
@@ -327,6 +328,53 @@ export function crearPrestamo(datos) {
     prestamos: [...estado.prestamos, prestamo],
     recibos: [...estado.recibos, ...cuotas],
     historial: anotar(estado.historial, 'prestamo', `Registró el préstamo de ${prestamo.entidad}`),
+  })
+  return prestamo
+}
+
+/**
+ * Cómo quedarían las cuotas al editar un préstamo. Las cuotas YA PAGADAS no se tocan (siguen con su
+ * fecha y monto); las demás se recalculan con el monto y la fecha de primera cuota indicados.
+ * Devuelve { cuotas: [{ numero, fechaLimite, monto, pagada }], minimoCuotas }.
+ */
+export function planEdicionPrestamo(id, { numCuotas, montoCuota, primeraFecha }) {
+  const existentes = estado.recibos.filter((r) => r.prestamoId === id)
+  const pagadas = new Map(existentes.filter((r) => r.estado === 'Pagado').map((r) => [r.cuota, r]))
+  const minimoCuotas = Math.max(0, ...pagadas.keys()) // no se puede dejar menos cuotas que las ya pagadas
+  const dia = partes(primeraFecha).d
+  const cuotas = Array.from({ length: numCuotas }, (_, i) => {
+    const numero = i + 1
+    const pagada = pagadas.get(numero)
+    return pagada
+      ? { numero, fechaLimite: pagada.fechaLimite, monto: pagada.monto, pagada: true }
+      : { numero, fechaLimite: sumarMeses(primeraFecha, i, dia), monto: montoCuota, pagada: false }
+  })
+  return { cuotas, minimoCuotas }
+}
+
+/** Edita un préstamo: banco, número de cuotas, monto de cuota y fecha de la primera cuota. */
+export function editarPrestamo(id, datos) {
+  const actual = obtenerPrestamo(id)
+  if (!actual || actor !== 'asistente') return null
+  const { cuotas, minimoCuotas } = planEdicionPrestamo(id, datos)
+  if (datos.numCuotas < minimoCuotas) return null
+  const entidad = datos.entidad.trim()
+  const codigoBase = `PRE-${String(actual.correlativo).padStart(4, '0')}`
+  const porNumero = new Map(estado.recibos.filter((r) => r.prestamoId === id).map((r) => [r.cuota, r]))
+  const ahora = new Date().toISOString()
+  const nuevas = cuotas.map((c) => {
+    const previa = porNumero.get(c.numero)
+    const comun = { empresa: entidad, codigo: `${codigoBase}-C${c.numero}/${datos.numCuotas}` }
+    if (previa) return { ...previa, ...comun, ...(c.pagada ? {} : { fechaLimite: c.fechaLimite, monto: c.monto }) }
+    return { id: nuevoId('r'), tipo: 'Préstamo', ...comun, fechaLimite: c.fechaLimite, monto: c.monto, igv: null, estado: 'Pendiente', pago: null, prestamoId: id, cuota: c.numero, creadoEn: ahora }
+  })
+  const total = Math.round(nuevas.reduce((t, r) => t + r.monto, 0) * 100) / 100
+  const prestamo = { ...actual, entidad, numCuotas: datos.numCuotas, montoCuota: datos.montoCuota, primeraFecha: datos.primeraFecha, montoTotal: total }
+  publicar({
+    ...estado,
+    prestamos: estado.prestamos.map((p) => (p.id === id ? prestamo : p)),
+    recibos: [...estado.recibos.filter((r) => r.prestamoId !== id), ...nuevas],
+    historial: anotar(estado.historial, 'editar', `Editó el préstamo de ${entidad}`),
   })
   return prestamo
 }

@@ -2,6 +2,7 @@
 import { Link } from 'react-router-dom'
 import { Landmark, Plus } from 'lucide-react'
 import { useDatos } from '../data/useDatos'
+import { useAuth } from '../context/AuthContext'
 import { resumenPrestamo } from '../data/store'
 import { Tarjeta, Vacio } from '../components/ui'
 import { formatoFecha } from '../utils/fechas'
@@ -9,6 +10,7 @@ import { formatoSoles } from '../utils/dinero'
 
 export default function PrestamosPage() {
   const { prestamos, recibos } = useDatos()
+  const { perfil } = useAuth()
 
   return (
     <div>
@@ -17,14 +19,16 @@ export default function PrestamosPage() {
           <h1 className="text-2xl font-bold sm:text-3xl">Préstamos</h1>
           <p className="mt-1 text-suave">Cada cuota se convierte en un recibo que el asistente paga.</p>
         </div>
-        <Link to="/prestamos/nuevo" className="inline-flex min-h-12 items-center gap-2 rounded-xl bg-brand px-5 font-semibold text-white hover:bg-brand-dark">
-          <Plus size={20} aria-hidden="true" /> Nuevo préstamo
-        </Link>
+        {perfil === 'asistente' && (
+          <Link to="/prestamos/nuevo" className="inline-flex min-h-12 items-center gap-2 rounded-full bg-brand px-5 font-semibold text-white hover:bg-brand-dark">
+            <Plus size={20} aria-hidden="true" /> Nuevo préstamo
+          </Link>
+        )}
       </div>
 
       {prestamos.length === 0 ? (
         <div className="mt-6">
-          <Vacio icono={Landmark} titulo="Aún no hay préstamos" texto="Registra un préstamo y sus cuotas aparecerán en el calendario." />
+          <Vacio icono={Landmark} titulo="Aún no hay préstamos" texto={perfil === 'asistente' ? 'Registra un préstamo y sus cuotas aparecerán en el calendario.' : 'Cuando el asistente registre un préstamo, aparecerá aquí.'} />
         </div>
       ) : (
         <div className="mt-6 grid gap-4 md:grid-cols-2">

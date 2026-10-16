@@ -103,7 +103,7 @@ export function crearDatosEjemplo() {
     h(-1, 17, 40, 'Gerente', 'ingreso', 'Ingresó al sistema'),
     h(-2, 10, 15, 'Asistente', 'crear', 'Registró el recibo de Distribuidora San Jorge (Proveedor)'),
     h(-2, 10, 32, 'Asistente', 'editar', 'Editó el monto del recibo de Distribuidora San Jorge'),
-    h(-3, 15, 0, 'Gerente', 'prestamo', 'Registró el préstamo de Banco de Crédito'),
+    h(-3, 15, 0, 'Asistente', 'prestamo', 'Registró el préstamo de Banco de Crédito'),
     h(-3, 8, 50, 'Asistente', 'crear', 'Registró el recibo de SEDALIB (Servicio)'),
   ]
 

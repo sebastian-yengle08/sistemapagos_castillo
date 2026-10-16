@@ -1,6 +1,7 @@
-// HU-08: detalle de un préstamo, con su tabla de cuotas (gerente).
+// HU-08: detalle de un préstamo, con su tabla de cuotas. El asistente puede editarlo; el gerente solo lo consulta.
 import { Link, useLocation, useParams } from 'react-router-dom'
-import { ArrowLeft, CheckCircle2, Landmark } from 'lucide-react'
+import { ArrowLeft, CheckCircle2, Landmark, Pencil } from 'lucide-react'
+import { useAuth } from '../context/AuthContext'
 import { useDatos } from '../data/useDatos'
 import { resumenPrestamo } from '../data/store'
 import { Insignia, Tarjeta, Vacio } from '../components/ui'
@@ -12,6 +13,7 @@ export default function PrestamoDetallePage() {
   const { id } = useParams()
   const { prestamos, recibos } = useDatos()
   const { state } = useLocation()
+  const { perfil } = useAuth()
   const p = prestamos.find((x) => x.id === id)
   if (!p) {
     return (
@@ -35,7 +37,14 @@ export default function PrestamoDetallePage() {
           <CheckCircle2 size={20} aria-hidden="true" /> {state.aviso}
         </p>
       )}
-      <h1 className="text-2xl font-bold sm:text-3xl">{p.entidad}</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-2xl font-bold sm:text-3xl">{p.entidad}</h1>
+        {perfil === 'asistente' && (
+          <Link to={`/prestamos/${p.id}/editar`} className="inline-flex min-h-12 items-center gap-2 rounded-full border border-borde bg-slate-900/[.05] px-5 font-semibold hover:bg-slate-900/10">
+            <Pencil size={18} aria-hidden="true" /> Editar préstamo
+          </Link>
+        )}
+      </div>
 
       <div className="mt-4 grid gap-3 sm:grid-cols-3">
         <Tarjeta className="p-4">

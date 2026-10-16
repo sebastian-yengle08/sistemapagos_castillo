@@ -14,6 +14,7 @@ const MENU = {
   asistente: [
     { a: '/', t: 'Calendario', I: CalendarDays, fin: true },
     { a: '/avisos', t: 'Avisos', I: Bell },
+    { a: '/prestamos', t: 'Préstamos', I: Landmark },
     { a: '/recibos/nuevo', t: 'Nuevo recibo', I: FilePlus2 },
   ],
   gerente: [
