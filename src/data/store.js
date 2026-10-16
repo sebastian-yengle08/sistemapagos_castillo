@@ -1,52 +1,98 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // Capa de datos de Pagos Castillo.
 //
-// Hoy guarda todo en localStorage. Las pantallas SOLO hablan con este archivo
-// (nunca tocan localStorage), así que para pasar a Supabase basta con reemplazar
-// `cargar()`/`guardar()` y el cuerpo de las funciones de abajo; la interfaz
-// (nombres y parámetros) puede quedarse igual. Cada tabla de Supabase sería:
-//   recibos, prestamos, historial.
-// Nota: las funciones de Supabase son asíncronas; al migrar, cada función
-// devolvería una Promesa y las pantallas harían `await`.
+// Las pantallas SOLO hablan con este archivo. Los datos viven en memoria (rápido
+// para la pantalla) y se guardan en Supabase (ver persistencia.js) o, si no hay
+// variables VITE_SUPABASE_*, en localStorage. Cada cambio se muestra al instante
+// y se envía a Supabase en segundo plano, en orden (cola).
 //
 // REGLA DE HISTORIAL: toda función que modifica datos registra su entrada en el
 // historial desde adentro (función `anotar`), para que no se pueda olvidar.
 // ─────────────────────────────────────────────────────────────────────────────
 import { crearDatosEjemplo } from './seed'
+import { hayNube, leerNube, sincronizarNube } from './persistencia'
 import { sumarMeses, partes } from '../utils/fechas'
 import { PERFILES } from '../config/constantes'
 
 const CLAVE = 'pagosCastillo.datos.v1'
 
 // ── Estado en memoria + suscriptores (para que React se entere de los cambios) ──
-let estado = cargar()
+let estado = { seq: 0, recibos: [], prestamos: [], historial: [] }
 const oyentes = new Set()
 let actor = null // 'asistente' | 'gerente' (quién hace los cambios)
+let usaNube = hayNube
+let cola = Promise.resolve() // los envíos a Supabase salen de uno en uno y en orden
 
-function cargar() {
+function avisarError(mensaje) {
+  console.error('[Pagos Castillo]', mensaje)
+  window.dispatchEvent(new CustomEvent('pagos:error', { detail: mensaje }))
+}
+const notificar = () => oyentes.forEach((f) => f())
+
+function leerLocal() {
   try {
     const crudo = localStorage.getItem(CLAVE)
     if (crudo) return JSON.parse(crudo)
   } catch {
-    /* si el almacenamiento falla o está dañado, se cargan datos de ejemplo */
+    /* almacenamiento dañado o bloqueado: se usan datos de ejemplo */
   }
-  const inicial = crearDatosEjemplo()
-  guardar(inicial)
-  return inicial
+  return null
 }
-
-function guardar(nuevo) {
+function guardarLocal(datos) {
   try {
-    localStorage.setItem(CLAVE, JSON.stringify(nuevo))
+    localStorage.setItem(CLAVE, JSON.stringify(datos))
   } catch {
     /* sin espacio o bloqueado: la app sigue funcionando en memoria */
   }
 }
 
+/** Carga los datos al abrir la app (desde Supabase o localStorage). Llamar una vez. */
+export async function iniciarDatos() {
+  if (usaNube) {
+    try {
+      const d = await leerNube()
+      if (d.recibos.length + d.prestamos.length + d.historial.length === 0) {
+        // Base vacía: primer arranque, se cargan los datos de ejemplo
+        const ejemplo = crearDatosEjemplo()
+        estado = { seq: 0, recibos: [], prestamos: [], historial: [] }
+        publicar(ejemplo)
+      } else {
+        estado = { seq: 0, ...d }
+      }
+      return
+    } catch (e) {
+      usaNube = false // no se pudo conectar: se sigue con localStorage
+      avisarError(`No se pudo conectar con Supabase (${e.message}). Se usan datos locales.`)
+    }
+  }
+  estado = leerLocal() ?? crearDatosEjemplo()
+  guardarLocal(estado)
+}
+
+/** Vuelve a leer Supabase (por si otra persona hizo cambios). Espera a los envíos pendientes. */
+export function refrescar() {
+  if (!usaNube) return
+  cola = cola.then(async () => {
+    try {
+      estado = { ...estado, ...(await leerNube()) }
+      notificar()
+    } catch {
+      /* sin conexión: se mantiene lo que ya se ve */
+    }
+  })
+}
+
 function publicar(nuevo) {
+  const previo = estado
   estado = nuevo
-  guardar(nuevo)
-  oyentes.forEach((f) => f())
+  if (usaNube) {
+    cola = cola
+      .then(() => sincronizarNube(previo, nuevo))
+      .catch((e) => avisarError(`No se pudo guardar en Supabase: ${e.message}`))
+  } else {
+    guardarLocal(nuevo)
+  }
+  notificar()
 }
 
 export const suscribir = (f) => {
@@ -74,7 +120,7 @@ function anotar(historial, accion, texto, perfil = actor) {
   ]
 }
 
-const nuevoId = (est, prefijo) => ({ id: `${prefijo}_${est.seq + 1}`, seq: est.seq + 1 })
+const nuevoId = (prefijo) => `${prefijo}_${crypto.randomUUID().slice(0, 12)}`
 const normalizar = (t) => String(t ?? '').toLowerCase().replace(/\s+/g, '')
 
 // ── Consultas ───────────────────────────────────────────────────────────────
@@ -104,7 +150,7 @@ export function ultimoMedioDeEmpresa(empresa) {
 
 // ── Recibos ─────────────────────────────────────────────────────────────────
 export function crearRecibo(datos) {
-  const { id, seq } = nuevoId(estado, 'r')
+  const id = nuevoId('r')
   const recibo = {
     id,
     tipo: datos.tipo,
@@ -121,7 +167,6 @@ export function crearRecibo(datos) {
   }
   publicar({
     ...estado,
-    seq,
     recibos: [...estado.recibos, recibo],
     historial: anotar(estado.historial, 'crear', `Registró el recibo de ${recibo.empresa} (${recibo.tipo})`),
   })
@@ -187,12 +232,10 @@ export function calcularCuotas({ numCuotas, montoCuota, primeraFecha }) {
 
 /** datos: { entidad, montoTotal, numCuotas, montoCuota, primeraFecha } */
 export function crearPrestamo(datos) {
-  const idp = nuevoId(estado, 'p')
-  let seq = idp.seq
   const correlativo = estado.prestamos.length + 1
   const codigoBase = `PRE-${String(correlativo).padStart(4, '0')}`
   const prestamo = {
-    id: idp.id,
+    id: nuevoId('p'),
     entidad: datos.entidad.trim(),
     montoTotal: datos.montoTotal,
     numCuotas: datos.numCuotas,
@@ -202,9 +245,8 @@ export function crearPrestamo(datos) {
     creadoEn: new Date().toISOString(),
   }
   const cuotas = calcularCuotas(datos).map((c) => {
-    seq += 1
     return {
-      id: `r_${seq}`,
+      id: nuevoId('r'),
       tipo: 'Préstamo',
       empresa: prestamo.entidad,
       codigo: `${codigoBase}-C${c.numero}/${datos.numCuotas}`,
@@ -220,7 +262,6 @@ export function crearPrestamo(datos) {
   })
   publicar({
     ...estado,
-    seq,
     prestamos: [...estado.prestamos, prestamo],
     recibos: [...estado.recibos, ...cuotas],
     historial: anotar(estado.historial, 'prestamo', `Registró el préstamo de ${prestamo.entidad}`),

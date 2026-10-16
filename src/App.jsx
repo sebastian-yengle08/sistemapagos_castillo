@@ -2,6 +2,7 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { useAuth } from './context/AuthContext'
 import Layout from './components/Layout'
+import AvisoError from './components/AvisoError'
 import PinPage from './pages/PinPage'
 import CalendarioPage from './pages/CalendarioPage'
 import AvisosPage from './pages/AvisosPage'
@@ -20,9 +21,11 @@ function Solo({ perfil: permitido, children }) {
 
 export default function App() {
   const { perfil } = useAuth()
-  if (!perfil) return <PinPage />
+  if (!perfil) return <><PinPage /><AvisoError /></>
 
   return (
+    <>
+    <AvisoError />
     <Routes>
       <Route element={<Layout />}>
         <Route index element={<CalendarioPage />} />
@@ -39,5 +42,6 @@ export default function App() {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>
+    </>
   )
 }
