@@ -65,14 +65,14 @@ export default function PinPage() {
     return () => window.removeEventListener('keydown', alTecla)
   }, [agregar, borrar])
 
-  const tecla = 'grid h-16 w-16 place-items-center rounded-full border border-white/10 bg-white/[.06] text-3xl font-semibold text-tinta transition-colors hover:bg-white/[.12] active:bg-brand/25 sm:h-20 sm:w-20 lg:h-[84px] lg:w-[84px]'
+  const tecla = 'grid h-16 w-16 place-items-center rounded-full border border-slate-300 bg-slate-900/[.05] text-3xl font-semibold text-tinta transition-colors hover:bg-slate-900/10 active:bg-brand/25 sm:h-20 sm:w-20 lg:h-[84px] lg:w-[84px]'
 
   return (
     <div className="min-h-dvh bg-fondo lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
       {/* Panel de marca: solo escritorio */}
-      <aside className="hidden flex-col justify-between border-r border-borde bg-lienzo2 bg-[radial-gradient(60%_50%_at_20%_15%,rgba(10,132,255,.35),transparent),radial-gradient(50%_40%_at_90%_95%,rgba(10,132,255,.18),transparent)] p-12 text-white lg:flex xl:p-16">
+      <aside className="hidden flex-col justify-between bg-marino bg-[radial-gradient(60%_50%_at_20%_15%,rgba(80,130,220,.35),transparent),radial-gradient(50%_40%_at_90%_95%,rgba(80,130,220,.2),transparent)] p-12 text-white lg:flex xl:p-16">
         <div className="flex items-center gap-3">
-          <span className="grid h-12 w-12 place-items-center rounded-xl border border-brand/40 bg-brand/20 text-brand">
+          <span className="grid h-12 w-12 place-items-center rounded-xl bg-white/15 text-white">
             <Building2 size={26} aria-hidden="true" />
           </span>
           <span className="text-2xl font-bold">Pagos Castillo</span>
@@ -91,7 +91,7 @@ export default function PinPage() {
       <div className="flex min-h-dvh flex-col items-center px-4 py-5 lg:justify-center lg:py-8">
         <main className="flex w-full max-w-sm flex-1 flex-col items-center justify-center lg:max-w-md lg:flex-none lg:rounded-3xl lg:border lg:border-borde lg:bg-sup lg:px-10 lg:py-10 lg:shadow-[0_20px_25px_-5px_rgba(15,23,42,.08)]">
           <div className="flex items-center gap-3 lg:hidden">
-            <span className="grid h-12 w-12 place-items-center rounded-xl border border-brand/40 bg-brand/20 text-brand">
+            <span className="grid h-12 w-12 place-items-center rounded-xl bg-white/15 text-white">
               <Building2 size={26} aria-hidden="true" />
             </span>
             <p className="text-2xl font-bold">Pagos Castillo</p>
@@ -101,7 +101,7 @@ export default function PinPage() {
 
           <div className={`mt-6 flex gap-4 ${error ? 'sacudir' : ''}`} role="img" aria-label={`${pin.length} de 4 dígitos ingresados`}>
             {[0, 1, 2, 3].map((i) => (
-              <span key={i} className={`h-5 w-5 rounded-full border-2 transition-colors ${error ? 'border-[#ff453a] bg-[#ff453a]' : i < pin.length ? 'border-brand bg-brand' : 'border-white/20 bg-transparent'}`} />
+              <span key={i} className={`h-5 w-5 rounded-full border-2 transition-colors ${error ? 'border-[#dc2626] bg-[#dc2626]' : i < pin.length ? 'border-brand bg-brand' : 'border-slate-300 bg-transparent'}`} />
             ))}
           </div>
 

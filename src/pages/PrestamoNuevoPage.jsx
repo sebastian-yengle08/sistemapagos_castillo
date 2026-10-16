@@ -78,7 +78,7 @@ export default function PrestamoNuevoPage() {
             Vista previa de cuotas
           </h2>
           {vista.length === 0 ? (
-            <p className="mt-2 rounded-xl bg-white/[.04] p-4 text-suave">Llena el número de cuotas, el monto y la fecha de la primera cuota para ver aquí cómo quedarán.</p>
+            <p className="mt-2 rounded-xl bg-slate-900/[.04] p-4 text-suave">Llena el número de cuotas, el monto y la fecha de la primera cuota para ver aquí cómo quedarán.</p>
           ) : (
             <Tarjeta className="mt-2 max-h-72 overflow-y-auto">
               <table className="w-full text-left">

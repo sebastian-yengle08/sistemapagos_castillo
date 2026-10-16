@@ -6,7 +6,7 @@ import { Tarjeta, Vacio } from '../components/ui'
 import { fechaLarga, fechaLimaDeInstante, horaLima, hoyISO, nombreDia, sumarDias } from '../utils/fechas'
 
 const ICONOS = {
-  ingreso: [LogIn, 'bg-white/[.06] text-suave'],
+  ingreso: [LogIn, 'bg-slate-900/[.05] text-suave'],
   crear: [FilePlus2, 'bg-brand/10 text-brand'],
   editar: [Pencil, 'bg-pend-bg text-pend-tx'],
   eliminar: [Trash2, 'bg-venc-bg text-venc-tx'],
@@ -64,7 +64,7 @@ export default function HistorialPage() {
                         <p className="font-semibold">{e.texto}</p>
                         <p className="text-sm text-suave">{horaLima(e.ts)}</p>
                       </div>
-                      <span className={`rounded-full px-3 py-0.5 text-sm font-semibold ${e.perfil === 'Gerente' ? 'bg-brand text-white' : 'bg-white/[.06] text-tinta'}`}>{e.perfil}</span>
+                      <span className={`rounded-full px-3 py-0.5 text-sm font-semibold ${e.perfil === 'Gerente' ? 'bg-brand text-white' : 'bg-slate-900/[.05] text-tinta'}`}>{e.perfil}</span>
                     </div>
                   )
                 })}

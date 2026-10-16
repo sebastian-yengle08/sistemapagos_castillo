@@ -17,7 +17,7 @@ const ETIQUETA = {
   Pagado: 'bg-pag-bg text-pag-tx border-pag-bd',
   Vencido: 'bg-venc-bg text-venc-tx border-venc-bd',
 }
-const PUNTO = { Pendiente: 'bg-[#ffd60a]', Pagado: 'bg-[#34c759]', Vencido: 'bg-[#ff453a]' }
+const PUNTO = { Pendiente: 'bg-[#f59e0b]', Pagado: 'bg-[#16a34a]', Vencido: 'bg-[#dc2626]' }
 
 function Contador({ titulo, valor, Icono, clase }) {
   return (
@@ -82,7 +82,7 @@ export default function CalendarioPage() {
 
   // Resumen del día elegido y botón para agregar un recibo ese día (solo asistente)
   const resumenDia = dia && (
-    <div className="mt-3 flex items-center justify-between gap-2 rounded-2xl border border-borde bg-white/[.04] px-4 py-3">
+    <div className="mt-3 flex items-center justify-between gap-2 rounded-2xl border border-borde bg-slate-900/[.04] px-4 py-3">
       <span className="flex items-center gap-2 text-sm font-semibold">
         <span className="h-2 w-2 rounded-full bg-brand" aria-hidden="true" /> {recibosDia.length} {recibosDia.length === 1 ? 'recibo programado' : 'recibos programados'}
       </span>
@@ -92,7 +92,7 @@ export default function CalendarioPage() {
     </div>
   )
   const agregarDia = dia && dia >= hoy && perfil === 'asistente' && (
-    <Link to={`/recibos/nuevo?fecha=${dia}`} className="mt-3 flex min-h-12 items-center justify-center gap-2 rounded-full bg-brand font-semibold text-white shadow-[inset_0_1px_0_rgba(255,255,255,.2),0_6px_20px_-6px_rgba(10,132,255,.6)] hover:brightness-110">
+    <Link to={`/recibos/nuevo?fecha=${dia}`} className="mt-3 flex min-h-12 items-center justify-center gap-2 rounded-full bg-brand font-semibold text-white shadow-sm hover:brightness-110">
       <Plus size={20} aria-hidden="true" /> Agregar recibo a este día
     </Link>
   )
@@ -104,14 +104,14 @@ export default function CalendarioPage() {
           <p className="text-lg font-bold">{fechaLarga(dia)}</p>
           <p className="text-sm capitalize text-suave">{nombreDia(dia)}</p>
         </div>
-        <button type="button" onClick={() => setDia(null)} aria-label="Cerrar" className="hidden rounded-full p-2 text-suave hover:bg-white/10 xl:block">
+        <button type="button" onClick={() => setDia(null)} aria-label="Cerrar" className="hidden rounded-full p-2 text-suave hover:bg-slate-900/10 xl:block">
           <X size={20} />
         </button>
       </div>
       {resumenDia}
       <div className="mt-3 flex flex-col gap-2">
         {recibosDia.length === 0 ? (
-          <p className="rounded-xl bg-white/[.04] p-4 text-center text-suave">No hay recibos este día.</p>
+          <p className="rounded-xl bg-slate-900/[.04] p-4 text-center text-suave">No hay recibos este día.</p>
         ) : (
           recibosDia.map((r) => <ReciboDia key={r.id} r={r} hoy={hoy} />)
         )}
@@ -131,13 +131,13 @@ export default function CalendarioPage() {
         {/* Navegación de mes */}
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center rounded-xl border border-borde bg-sup">
-            <button type="button" onClick={() => mover(-1)} aria-label="Mes anterior" className="grid h-12 w-12 place-items-center rounded-l-xl hover:bg-white/5">
+            <button type="button" onClick={() => mover(-1)} aria-label="Mes anterior" className="grid h-12 w-12 place-items-center rounded-l-xl hover:bg-slate-900/5">
               <ChevronLeft size={22} />
             </button>
             <h1 className="min-w-36 text-center text-xl font-bold text-tinta sm:min-w-44 sm:text-2xl">
               {nombreMes(vista.m)} {vista.a}
             </h1>
-            <button type="button" onClick={() => mover(1)} aria-label="Mes siguiente" className="grid h-12 w-12 place-items-center rounded-r-xl hover:bg-white/5">
+            <button type="button" onClick={() => mover(1)} aria-label="Mes siguiente" className="grid h-12 w-12 place-items-center rounded-r-xl hover:bg-slate-900/5">
               <ChevronRight size={22} />
             </button>
           </div>
@@ -160,7 +160,7 @@ export default function CalendarioPage() {
 
         {/* Cuadrícula del mes */}
         <Tarjeta className="mt-4 overflow-hidden">
-          <div className="grid grid-cols-7 border-b border-borde bg-white/[.03] text-center text-sm font-bold text-suave">
+          <div className="grid grid-cols-7 border-b border-borde bg-slate-900/[.03] text-center text-sm font-bold text-suave">
             {SEMANA.map((d) => (
               <div key={d} className="py-2.5">
                 {d}
@@ -169,7 +169,7 @@ export default function CalendarioPage() {
           </div>
           <div className="grid grid-cols-7">
             {celdas.map((f, i) => {
-              if (!f) return <div key={`v${i}`} className="min-h-14 bg-transparent sm:min-h-28 sm:border-b sm:border-r sm:border-borde sm:bg-white/[.03]" />
+              if (!f) return <div key={`v${i}`} className="min-h-14 bg-transparent sm:min-h-28 sm:border-b sm:border-r sm:border-borde sm:bg-slate-900/[.03]" />
               const lista = porFecha[f] ?? []
               const esHoy = f === hoy
               const elegido = f === dia
@@ -180,7 +180,7 @@ export default function CalendarioPage() {
                   type="button"
                   onClick={() => setDia(f)}
                   aria-label={`${fechaLarga(f)}: ${lista.length} recibos`}
-                  className={`flex min-h-14 flex-col items-center gap-1 rounded-2xl p-1 text-left transition-colors hover:bg-white/5 sm:min-h-28 sm:items-stretch sm:rounded-none sm:border-b sm:border-r sm:border-borde sm:p-1.5 ${elegido ? 'bg-brand/10 ring-2 ring-inset ring-brand' : ''}`}
+                  className={`flex min-h-14 flex-col items-center gap-1 rounded-2xl p-1 text-left transition-colors hover:bg-slate-900/5 sm:min-h-28 sm:items-stretch sm:rounded-none sm:border-b sm:border-r sm:border-borde sm:p-1.5 ${elegido ? 'bg-brand/10 ring-2 ring-inset ring-brand' : ''}`}
                 >
                   <span className={`grid h-7 w-7 place-items-center self-center rounded-full sm:self-start text-sm font-bold ${esHoy ? 'bg-brand text-white' : ''}`}>{n}</span>
                   {/* Celular: puntos de color; escritorio: etiquetas con la empresa */}
@@ -244,7 +244,7 @@ export default function CalendarioPage() {
               <p className="text-sm capitalize text-suave">{nombreDia(dia)}</p>
               {resumenDia}
               <div className="mt-3 flex flex-col gap-2">
-                {recibosDia.length === 0 ? <p className="rounded-xl bg-white/[.04] p-4 text-center text-suave">No hay recibos este día.</p> : recibosDia.map((r) => <ReciboDia key={r.id} r={r} hoy={hoy} />)}
+                {recibosDia.length === 0 ? <p className="rounded-xl bg-slate-900/[.04] p-4 text-center text-suave">No hay recibos este día.</p> : recibosDia.map((r) => <ReciboDia key={r.id} r={r} hoy={hoy} />)}
               </div>
               {agregarDia}
             </>
@@ -272,7 +272,7 @@ function ReciboDia({ r, hoy }) {
           <span className={`h-2 w-2 rounded-full ${PUNTO[estado]}`} aria-hidden="true" />
           {estado}
         </span>
-        <Link to={`/recibos/${r.id}`} state={{ origen: '/' }} className="inline-flex min-h-12 items-center rounded-full border border-borde bg-white/[.06] px-4 font-semibold text-brand hover:bg-white/[.12]">
+        <Link to={`/recibos/${r.id}`} state={{ origen: '/' }} className="inline-flex min-h-12 items-center rounded-full border border-borde bg-slate-900/[.05] px-4 font-semibold text-brand hover:bg-slate-900/10">
           Ver detalle
         </Link>
       </div>

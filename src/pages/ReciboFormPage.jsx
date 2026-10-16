@@ -146,7 +146,7 @@ export default function ReciboFormPage() {
               <h2 className="text-xl font-bold">Este recibo parece repetido</h2>
             </div>
             <p className="mt-3 text-suave">Ya existe un recibo con la misma empresa y el mismo código:</p>
-            <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 rounded-xl bg-white/[.04] p-4">
+            <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 rounded-xl bg-slate-900/[.04] p-4">
               <dt className="text-suave">Empresa</dt>
               <dd className="font-semibold">{duplicado.empresa}</dd>
               <dt className="text-suave">Código</dt>

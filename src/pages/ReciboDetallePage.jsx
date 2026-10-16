@@ -146,7 +146,7 @@ export default function ReciboDetallePage() {
           )}
 
           {esCuota && (
-            <p className="flex items-center gap-2 rounded-xl bg-white/[.06] p-3 text-sm text-suave">
+            <p className="flex items-center gap-2 rounded-xl bg-slate-900/[.05] p-3 text-sm text-suave">
               <Banknote size={18} aria-hidden="true" /> Esta cuota viene de un préstamo: solo se puede pagar, corregir o anular su pago.
             </p>
           )}
