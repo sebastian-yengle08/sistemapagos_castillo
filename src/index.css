@@ -3,24 +3,31 @@
 /* Paleta y tipografía de Pagos Castillo (sistema de diseño "Clarity") */
 @theme {
   --font-sans: "Plus Jakarta Sans", system-ui, sans-serif;
-  --color-brand: #1f4e8c;
-  --color-brand-dark: #163b6b;
-  --color-brand-darker: #0f2a4d;
-  --color-fondo: #f6f8fb;
-  --color-borde: #e2e8f0;
-  --color-tinta: #1e293b;
-  --color-suave: #64748b;
-  --color-pend-bg: #fef3c7;
-  --color-pend-tx: #b45309;
-  --color-pend-bd: #fde68a;
-  --color-pag-bg: #d1fae5;
-  --color-pag-tx: #047857;
-  --color-pag-bd: #a7f3d0;
-  --color-venc-bg: #fee2e2;
-  --color-venc-tx: #b91c1c;
-  --color-venc-bd: #fecaca;
+  /* Tema oscuro "Obsidian" (diseño iOS dark) */
+  --color-brand: #0a84ff;
+  --color-brand-dark: #3d9bff;
+  --color-brand-darker: #0070e0;
+  --color-fondo: #09090b;
+  --color-lienzo2: #0d0d0e;
+  --color-sup: #18181b;
+  --color-sup2: #1f1f23;
+  --color-sup3: #27272a;
+  --color-borde: rgba(255, 255, 255, 0.09);
+  --color-tinta: #f4f4f5;
+  --color-suave: #a1a1aa;
+  --color-terc: #71717a;
+  --color-pend-bg: rgba(255, 214, 10, 0.12);
+  --color-pend-tx: #ffd60a;
+  --color-pend-bd: rgba(255, 214, 10, 0.3);
+  --color-pag-bg: rgba(52, 199, 89, 0.12);
+  --color-pag-tx: #34c759;
+  --color-pag-bd: rgba(52, 199, 89, 0.3);
+  --color-venc-bg: rgba(255, 69, 58, 0.13);
+  --color-venc-tx: #ff453a;
+  --color-venc-bd: rgba(255, 69, 58, 0.32);
 }
 
+html { color-scheme: dark; }
 html, body, #root { min-height: 100%; }
 body {
   background: var(--color-fondo);
@@ -33,7 +40,7 @@ body {
 
 /* Foco visible para accesibilidad */
 :focus-visible {
-  outline: 2px solid rgba(31, 78, 140, 0.6);
+  outline: 2px solid rgba(10, 132, 255, 0.7);
   outline-offset: 2px;
 }
 

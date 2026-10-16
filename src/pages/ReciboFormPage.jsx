@@ -1,6 +1,6 @@
 // HU-01 Nuevo recibo, HU-04 Editar y HU-05 aviso de recibo repetido (solo asistente).
 import { useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, AlertTriangle } from 'lucide-react'
 import { Boton, Campo, Chip, Tarjeta, Ventana, claseInput } from '../components/ui'
 import { TIPOS } from '../config/constantes'
@@ -12,12 +12,13 @@ export default function ReciboFormPage() {
   const { id } = useParams()
   const navegar = useNavigate()
   const editando = !!id
+  const [consulta] = useSearchParams()
   const [original] = useState(() => (id ? obtenerRecibo(id) : null))
 
   const [tipo, setTipo] = useState(original?.tipo ?? '')
   const [empresa, setEmpresa] = useState(original?.empresa ?? '')
   const [codigo, setCodigo] = useState(original?.codigo ?? '')
-  const [fecha, setFecha] = useState(original?.fechaLimite ?? hoyISO())
+  const [fecha, setFecha] = useState(original?.fechaLimite ?? (/^\d{4}-\d{2}-\d{2}$/.test(consulta.get('fecha') ?? '') ? consulta.get('fecha') : hoyISO()))
   const [monto, setMonto] = useState(original ? original.monto.toFixed(2) : '')
   const [igv, setIgv] = useState(original?.igv != null ? original.igv.toFixed(2) : '')
   const [errores, setErrores] = useState({})
@@ -79,7 +80,7 @@ export default function ReciboFormPage() {
           e.preventDefault()
           guardar()
         }}
-        className="mt-5 flex flex-col gap-5 rounded-2xl border border-borde bg-white p-4 sm:p-6"
+        className="mt-5 flex flex-col gap-5 rounded-2xl border border-borde bg-sup p-4 sm:p-6"
       >
         <fieldset>
           <legend className="mb-1.5 text-base font-semibold">Tipo de recibo</legend>
@@ -140,7 +141,7 @@ export default function ReciboFormPage() {
               <h2 className="text-xl font-bold">Este recibo parece repetido</h2>
             </div>
             <p className="mt-3 text-suave">Ya existe un recibo con la misma empresa y el mismo código:</p>
-            <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 rounded-xl bg-slate-50 p-4">
+            <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 rounded-xl bg-white/[.04] p-4">
               <dt className="text-suave">Empresa</dt>
               <dd className="font-semibold">{duplicado.empresa}</dd>
               <dt className="text-suave">Código</dt>

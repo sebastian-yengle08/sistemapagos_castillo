@@ -45,7 +45,7 @@ export default function PrestamoNuevoPage() {
       <h1 className="text-2xl font-bold sm:text-3xl">Nuevo préstamo</h1>
       <p className="mt-1 text-suave">Escribe la cuota tal como la cobra el banco: el sistema no calcula intereses.</p>
 
-      <form noValidate onSubmit={guardar} className="mt-5 flex flex-col gap-5 rounded-2xl border border-borde bg-white p-4 sm:p-6">
+      <form noValidate onSubmit={guardar} className="mt-5 flex flex-col gap-5 rounded-2xl border border-borde bg-sup p-4 sm:p-6">
         <Campo etiqueta="Banco o entidad" id="p-ent" error={errores.entidad}>
           <input id="p-ent" value={entidad} onChange={(e) => setEntidad(e.target.value)} placeholder="Ej.: Banco de Crédito" className={claseInput(errores.entidad)} />
         </Campo>
@@ -76,7 +76,7 @@ export default function PrestamoNuevoPage() {
             Vista previa de cuotas
           </h2>
           {vista.length === 0 ? (
-            <p className="mt-2 rounded-xl bg-slate-50 p-4 text-suave">Llena el número de cuotas, el monto y la fecha de la primera cuota para ver aquí cómo quedarán.</p>
+            <p className="mt-2 rounded-xl bg-white/[.04] p-4 text-suave">Llena el número de cuotas, el monto y la fecha de la primera cuota para ver aquí cómo quedarán.</p>
           ) : (
             <Tarjeta className="mt-2 max-h-72 overflow-y-auto">
               <table className="w-full text-left">

@@ -45,7 +45,7 @@ export default function PrestamosPage() {
                       </p>
                     </div>
                   </div>
-                  <div className="mt-4 h-3 overflow-hidden rounded-full bg-slate-100" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label="Avance de cuotas pagadas">
+                  <div className="mt-4 h-3 overflow-hidden rounded-full bg-white/[.06]" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label="Avance de cuotas pagadas">
                     <div className="h-full rounded-full bg-brand" style={{ width: `${pct}%` }} />
                   </div>
                   <dl className="mt-4 grid grid-cols-2 gap-3">

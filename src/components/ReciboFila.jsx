@@ -9,14 +9,15 @@ const ICONOS = { Servicio: Zap, Proveedor: Truck, Impuesto: FileText, Préstamo:
 export const iconoDeTipo = (tipo) => ICONOS[tipo] ?? FileText
 
 /** Tarjeta de un recibo: empresa, código, fecha límite, monto y estado. Al tocarla abre el detalle. */
-export default function ReciboFila({ recibo, hoy, compacta }) {
+/** acento: color de la franja izquierda (clase de borde), usada en Avisos. */
+export default function ReciboFila({ recibo, hoy, compacta, acento }) {
   const estado = estadoVisible(recibo, hoy)
   const Icono = iconoDeTipo(recibo.tipo)
   const colorIcono = estado === 'Vencido' ? 'bg-venc-bg text-venc-tx' : estado === 'Pagado' ? 'bg-pag-bg text-pag-tx' : 'bg-brand/10 text-brand'
   return (
     <Link
       to={`/recibos/${recibo.id}`}
-      className={`flex items-center gap-3 rounded-2xl border bg-white p-3 transition-shadow hover:shadow-md sm:p-4 ${estado === 'Vencido' ? 'border-venc-bd' : 'border-borde'}`}
+      className={`flex items-center gap-3 rounded-2xl border bg-sup p-3 transition-shadow hover:bg-sup2 sm:p-4 ${estado === 'Vencido' ? 'border-venc-bd' : 'border-borde'} ${acento ? `border-l-4 ${acento}` : ''}`}
     >
       <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl ${colorIcono}`}>
         <Icono size={22} aria-hidden="true" />
@@ -36,7 +37,7 @@ export default function ReciboFila({ recibo, hoy, compacta }) {
         <span className="text-base font-bold">{formatoSoles(recibo.monto)}</span>
         {!compacta && <Insignia estado={estado} />}
       </span>
-      <ChevronRight size={20} className="hidden shrink-0 text-slate-400 sm:block" aria-hidden="true" />
+      <ChevronRight size={20} className="hidden shrink-0 text-terc sm:block" aria-hidden="true" />
     </Link>
   )
 }

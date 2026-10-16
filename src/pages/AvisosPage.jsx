@@ -7,10 +7,10 @@ import { agruparAvisos } from '../utils/avisos'
 import { hoyISO } from '../utils/fechas'
 
 const GRUPOS = [
-  { k: 'hoy', t: 'Vence hoy', punto: 'bg-amber-500', titulo: 'text-tinta' },
-  { k: 'tresDias', t: 'Vence en 3 días', punto: 'bg-amber-400', titulo: 'text-tinta' },
-  { k: 'vencidos', t: 'Vencidos', punto: 'bg-red-600', titulo: 'text-venc-tx' },
-  { k: 'mes', t: 'Pendientes del mes', punto: 'bg-slate-400', titulo: 'text-tinta' },
+  { k: 'hoy', t: 'Vence hoy', punto: 'bg-[#ffd60a]', acento: 'border-l-[#ffd60a]', titulo: 'text-tinta' },
+  { k: 'tresDias', t: 'Vence en 3 días', punto: 'bg-brand', acento: 'border-l-brand', titulo: 'text-tinta' },
+  { k: 'vencidos', t: 'Vencidos', punto: 'bg-[#ff453a]', acento: 'border-l-[#ff453a]', titulo: 'text-venc-tx' },
+  { k: 'mes', t: 'Pendientes del mes', punto: 'bg-zinc-500', acento: 'border-l-zinc-500', titulo: 'text-tinta' },
 ]
 
 export default function AvisosPage() {
@@ -29,16 +29,16 @@ export default function AvisosPage() {
         </div>
       ) : (
         <div className="mt-6 flex flex-col gap-7">
-          {GRUPOS.filter(({ k }) => g[k].length > 0).map(({ k, t, punto, titulo }) => (
+          {GRUPOS.filter(({ k }) => g[k].length > 0).map(({ k, t, punto, acento, titulo }) => (
             <section key={k} aria-labelledby={`g-${k}`}>
               <h2 id={`g-${k}`} className={`mb-2 flex items-center gap-2 text-lg font-bold ${titulo}`}>
                 <span className={`h-3 w-3 rounded-full ${punto}`} aria-hidden="true" />
                 {t}
-                <span className="rounded-full bg-slate-100 px-2 text-sm font-semibold text-suave">{g[k].length}</span>
+                <span className="rounded-full bg-white/[.06] px-2 text-sm font-semibold text-suave">{g[k].length}</span>
               </h2>
               <div className="flex flex-col gap-2">
                 {g[k].map((r) => (
-                  <ReciboFila key={r.id} recibo={r} hoy={hoy} />
+                  <ReciboFila key={r.id} recibo={r} hoy={hoy} acento={acento} />
                 ))}
               </div>
             </section>

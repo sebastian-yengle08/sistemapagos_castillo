@@ -4,11 +4,12 @@ import { Check, CheckCircle2, Clock, AlertCircle, X } from 'lucide-react'
 
 /** Botón. variante: primario | secundario | peligro. Mínimo 48 px de alto. */
 export function Boton({ variante = 'secundario', className = '', grande, children, ...props }) {
-  const base = 'inline-flex items-center justify-center gap-2 rounded-xl font-semibold transition-colors min-h-12 px-5 '
+  const base = 'inline-flex items-center justify-center gap-2 rounded-full font-semibold transition-all min-h-12 px-5 active:scale-[0.98] '
   const v = {
-    primario: 'bg-brand text-white hover:bg-brand-dark active:bg-brand-darker',
-    secundario: 'bg-white text-tinta border-[1.5px] border-borde hover:bg-slate-50 hover:border-slate-300',
-    peligro: 'bg-venc-tx text-white hover:bg-red-800',
+    primario: 'bg-brand text-white shadow-[inset_0_1px_0_rgba(255,255,255,.2),0_6px_20px_-6px_rgba(10,132,255,.6)] hover:brightness-110',
+    secundario: 'bg-white/[.06] text-tinta border border-borde hover:bg-white/[.12]',
+    peligro: 'bg-venc-tx text-white hover:brightness-110',
+    peligroSuave: 'bg-venc-bg text-venc-tx border border-venc-bd hover:bg-venc-tx hover:text-white',
   }[variante]
   return (
     <button type="button" className={`${base}${v} ${grande ? 'min-h-14 text-lg w-full' : ''} ${className}`} {...props}>
@@ -18,9 +19,9 @@ export function Boton({ variante = 'secundario', className = '', grande, childre
 }
 
 const ESTILOS_ESTADO = {
-  Pendiente: { cls: 'bg-pend-bg text-pend-tx border-pend-bd', dot: 'bg-amber-600', Icono: Clock },
-  Pagado: { cls: 'bg-pag-bg text-pag-tx border-pag-bd', dot: 'bg-emerald-600', Icono: CheckCircle2 },
-  Vencido: { cls: 'bg-venc-bg text-venc-tx border-venc-bd', dot: 'bg-red-600', Icono: AlertCircle },
+  Pendiente: { cls: 'bg-pend-bg text-pend-tx border-pend-bd', dot: 'bg-[#ffd60a]', Icono: Clock },
+  Pagado: { cls: 'bg-pag-bg text-pag-tx border-pag-bd', dot: 'bg-[#34c759]', Icono: CheckCircle2 },
+  Vencido: { cls: 'bg-venc-bg text-venc-tx border-venc-bd', dot: 'bg-[#ff453a]', Icono: AlertCircle },
 }
 export const estiloEstado = (e) => ESTILOS_ESTADO[e]
 
@@ -43,8 +44,8 @@ export function Chip({ activo, onClick, children, nota }) {
       role="radio"
       aria-checked={!!activo}
       onClick={onClick}
-      className={`inline-flex min-h-12 items-center gap-1.5 rounded-xl px-4 text-base transition-colors ${
-        activo ? 'border-[1.5px] border-brand bg-brand/10 font-bold text-brand' : 'border border-borde bg-white text-tinta hover:bg-slate-50'
+      className={`inline-flex min-h-12 items-center gap-1.5 rounded-full px-4 text-base transition-colors ${
+        activo ? 'border-[1.5px] border-brand bg-brand/15 font-bold text-brand' : 'border border-borde bg-white/[.04] text-tinta hover:bg-white/10'
       }`}
     >
       {activo && <Check size={18} aria-hidden="true" />}
@@ -75,8 +76,8 @@ export function Campo({ etiqueta, id, error, ayuda, children }) {
 }
 
 export const claseInput = (error) =>
-  `h-12 w-full rounded-xl border bg-white px-4 text-base outline-none transition focus:border-brand focus:ring-4 focus:ring-brand/15 ${
-    error ? 'border-venc-tx' : 'border-borde'
+  `h-12 w-full rounded-xl border bg-sup px-4 text-base text-tinta outline-none transition placeholder:text-terc focus:border-brand focus:ring-4 focus:ring-brand/25 ${
+    error ? 'border-venc-tx' : 'border-white/10'
   }`
 
 /** Ventana: centrada en escritorio, hoja inferior en celular. */
@@ -89,10 +90,10 @@ export function Ventana({ abierta, onCerrar, titulo, children, ancho = 'max-w-lg
   }, [abierta, onCerrar])
   if (!abierta) return null
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/40 sm:items-center sm:p-4" onMouseDown={(e) => e.target === e.currentTarget && onCerrar?.()}>
-      <div role="dialog" aria-modal="true" aria-label={titulo} className={`subir max-h-[92vh] w-full ${ancho} overflow-y-auto rounded-t-3xl bg-white p-5 shadow-2xl sm:rounded-3xl sm:p-6`}>
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/65 backdrop-blur-sm sm:items-center sm:p-4" onMouseDown={(e) => e.target === e.currentTarget && onCerrar?.()}>
+      <div role="dialog" aria-modal="true" aria-label={titulo} className={`subir max-h-[92vh] w-full ${ancho} overflow-y-auto rounded-t-[28px] border border-white/10 bg-sup2 p-5 shadow-[0_24px_64px_-12px_rgba(0,0,0,.7)] sm:rounded-[28px] sm:p-6`}>
         {onCerrar && (
-          <button type="button" onClick={onCerrar} aria-label="Cerrar" className="float-right -mr-1 -mt-1 rounded-full p-2 text-suave hover:bg-slate-100">
+          <button type="button" onClick={onCerrar} aria-label="Cerrar" className="float-right -mr-1 -mt-1 rounded-full p-2 text-suave hover:bg-white/10">
             <X size={22} />
           </button>
         )}
@@ -105,7 +106,7 @@ export function Ventana({ abierta, onCerrar, titulo, children, ancho = 'max-w-lg
 /** Estado vacío amable. */
 export function Vacio({ icono: Icono, titulo, texto, children }) {
   return (
-    <div className="flex flex-col items-center gap-2 rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-10 text-center">
+    <div className="flex flex-col items-center gap-2 rounded-2xl border border-dashed border-white/15 bg-white/[.03] px-6 py-10 text-center">
       {Icono && (
         <span className="mb-1 grid h-14 w-14 place-items-center rounded-full bg-brand/10 text-brand">
           <Icono size={28} aria-hidden="true" />
@@ -120,7 +121,7 @@ export function Vacio({ icono: Icono, titulo, texto, children }) {
 
 export function Tarjeta({ className = '', children, ...p }) {
   return (
-    <div className={`rounded-2xl border border-borde bg-white shadow-[0_1px_3px_rgba(30,41,59,.04)] ${className}`} {...p}>
+    <div className={`rounded-2xl border border-borde bg-sup shadow-[inset_0_1px_0_rgba(255,255,255,.06),0_8px_24px_-8px_rgba(0,0,0,.5)] ${className}`} {...p}>
       {children}
     </div>
   )

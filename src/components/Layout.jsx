@@ -1,6 +1,6 @@
 // Marco de la aplicación: barra lateral (escritorio), barra superior y navegación inferior (celular).
 import { NavLink, Outlet, Link, useLocation } from 'react-router-dom'
-import { Bell, CalendarDays, FilePlus2, Landmark, History, Lock, Building2 } from 'lucide-react'
+import { Bell, CalendarDays, FilePlus2, Landmark, History, Lock, Building2, Plus } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useDatos } from '../data/useDatos'
 import { agruparAvisos } from '../utils/avisos'
@@ -24,11 +24,11 @@ const MENU = {
 function Logo({ chico }) {
   return (
     <Link to="/" className="flex items-center gap-2 sm:gap-3" aria-label="Pagos Castillo, ir al calendario">
-      <span className={`grid place-items-center rounded-xl bg-brand text-white ${chico ? 'h-9 w-9' : 'h-11 w-11'}`}>
+      <span className={`grid place-items-center rounded-xl border border-brand/40 bg-brand/20 text-brand ${chico ? 'h-9 w-9' : 'h-11 w-11'}`}>
         <Building2 size={chico ? 20 : 24} aria-hidden="true" />
       </span>
       <span className="leading-tight">
-        <span className={`block whitespace-nowrap font-bold text-brand ${chico ? "text-lg" : "text-xl"}`}>Pagos Castillo</span>
+        <span className={`block whitespace-nowrap font-bold text-tinta ${chico ? "text-lg" : "text-xl"}`}>Pagos Castillo</span>
         {!chico && <span className="block text-sm text-suave">Empresa Castillo</span>}
       </span>
     </Link>
@@ -46,10 +46,10 @@ export default function Layout() {
   return (
     <div className="min-h-screen lg:pl-72">
       {/* Barra lateral fija: solo escritorio */}
-      <aside className="fixed inset-y-0 left-0 hidden w-72 flex-col border-r border-borde bg-white p-5 lg:flex">
+      <aside className="fixed inset-y-0 left-0 hidden w-72 flex-col border-r border-borde bg-lienzo2 p-5 lg:flex">
         <Logo />
         {perfil === 'asistente' && (
-          <Link to="/recibos/nuevo" className="mt-6 flex min-h-14 items-center justify-center gap-2 rounded-xl bg-brand text-lg font-bold text-white hover:bg-brand-dark">
+          <Link to="/recibos/nuevo" className="mt-6 flex min-h-14 items-center justify-center gap-2 rounded-full bg-brand text-lg font-bold text-white shadow-[inset_0_1px_0_rgba(255,255,255,.2),0_8px_24px_-6px_rgba(10,132,255,.65)] transition hover:brightness-110 active:scale-[0.98]">
             <FilePlus2 size={22} aria-hidden="true" /> Nuevo recibo
           </Link>
         )}
@@ -61,7 +61,7 @@ export default function Layout() {
               end={fin}
               className={({ isActive }) =>
                 `flex min-h-12 items-center gap-3 rounded-xl px-4 text-base font-semibold transition-colors ${
-                  isActive ? 'bg-brand/10 text-brand' : 'text-slate-600 hover:bg-slate-50'
+                  isActive ? 'border border-brand/30 bg-brand/15 text-brand' : 'border border-transparent text-suave hover:bg-white/5'
                 }`
               }
             >
@@ -74,7 +74,7 @@ export default function Layout() {
       </aside>
 
       {/* Barra superior */}
-      <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-borde bg-white/95 px-3 backdrop-blur sm:px-4 lg:px-8">
+      <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-borde bg-lienzo2/80 px-3 backdrop-blur sm:px-4 lg:px-8">
         <div className="lg:hidden">
           <Logo chico />
         </div>
@@ -82,13 +82,13 @@ export default function Layout() {
           Hola, <span className="font-bold text-tinta">{nombre}</span>
         </p>
         <div className="flex items-center gap-2">
-          <Link to="/avisos" aria-label={`Avisos: ${avisos}`} className="relative grid h-11 w-11 place-items-center rounded-full sm:h-12 sm:w-12 text-slate-600 hover:bg-slate-100">
+          <Link to="/avisos" aria-label={`Avisos: ${avisos}`} className="relative grid h-11 w-11 place-items-center rounded-full sm:h-12 sm:w-12 text-suave hover:bg-white/10">
             <Bell size={24} aria-hidden="true" />
             {avisos > 0 && (
               <span className="absolute right-1 top-1 grid min-w-5 place-items-center rounded-full bg-venc-tx px-1 text-xs font-bold leading-5 text-white">{avisos}</span>
             )}
           </Link>
-          <button type="button" onClick={bloquear} aria-label="Bloquear" className="flex min-h-12 items-center gap-2 rounded-xl border-[1.5px] border-borde px-3 font-semibold hover:bg-slate-50 sm:px-4">
+          <button type="button" onClick={bloquear} aria-label="Bloquear" className="flex min-h-12 items-center gap-2 rounded-full border border-borde bg-white/[.06] px-3 font-semibold hover:bg-white/[.12] sm:px-4">
             <Lock size={18} aria-hidden="true" /> <span className="hidden min-[400px]:inline">Bloquear</span>
           </button>
         </div>
@@ -96,19 +96,28 @@ export default function Layout() {
 
       <ActivarAvisos />
 
-      <main key={pathname} className="mx-auto max-w-[1280px] px-4 pb-28 pt-5 lg:px-8 lg:pb-10 lg:pt-8">
+      <main key={pathname} className="mx-auto max-w-[1280px] px-4 pb-32 pt-5 lg:px-8 lg:pb-10 lg:pt-8">
         <Outlet />
       </main>
 
-      {/* Navegación inferior: solo celular */}
-      <nav aria-label="Menú principal" className="fixed inset-x-0 bottom-0 z-30 grid border-t border-borde bg-white lg:hidden" style={{ gridTemplateColumns: `repeat(${menu.length}, 1fr)` }}>
-        {menu.map(({ a, t, I, fin }) => (
-          <NavLink key={a} to={a} end={fin} className={({ isActive }) => `relative flex min-h-16 flex-col items-center justify-center gap-0.5 text-xs font-semibold ${isActive ? 'text-brand' : 'text-suave'}`}>
-            <I size={24} aria-hidden="true" />
-            {t}
-            {t === 'Avisos' && avisos > 0 && <span className="absolute right-1/4 top-1.5 min-w-5 rounded-full bg-venc-tx px-1 text-center text-xs font-bold leading-5 text-white">{avisos}</span>}
-          </NavLink>
-        ))}
+      {/* Navegación inferior flotante (vidrio): solo celular. "Nuevo recibo" es el botón central destacado */}
+      <nav aria-label="Menú principal" className="fixed inset-x-3 bottom-3 z-30 flex items-end justify-around rounded-[28px] border border-white/10 bg-sup/80 px-2 pb-1 shadow-[0_8px_32px_-4px_rgba(0,0,0,.6)] backdrop-blur-xl lg:hidden">
+        {menu.map(({ a, t, I, fin }) =>
+          t === 'Nuevo recibo' ? (
+            <NavLink key={a} to={a} className="-mt-6 flex min-h-16 flex-1 flex-col items-center justify-end gap-0.5 text-xs font-semibold text-tinta">
+              <span className="grid h-14 w-14 place-items-center rounded-full bg-brand text-white shadow-[0_8px_24px_-4px_rgba(10,132,255,.8)] ring-4 ring-fondo">
+                <Plus size={28} aria-hidden="true" />
+              </span>
+              {t}
+            </NavLink>
+          ) : (
+            <NavLink key={a} to={a} end={fin} className={({ isActive }) => `relative flex min-h-16 flex-1 flex-col items-center justify-center gap-0.5 text-xs font-semibold ${isActive ? 'text-brand' : 'text-suave'}`}>
+              <I size={24} aria-hidden="true" />
+              {t}
+              {t === 'Avisos' && avisos > 0 && <span className="absolute right-[22%] top-2 min-w-5 rounded-full bg-venc-tx px-1 text-center text-xs font-bold leading-5 text-white">{avisos}</span>}
+            </NavLink>
+          ),
+        )}
       </nav>
     </div>
   )
