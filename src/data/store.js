@@ -10,7 +10,7 @@
 // historial desde adentro (función `anotar`), para que no se pueda olvidar.
 // ─────────────────────────────────────────────────────────────────────────────
 import { crearDatosEjemplo } from './seed'
-import { hayNube, leerNube, sincronizarNube } from './persistencia'
+import { hayNube, leerNube, sincronizarNube, suscribirCambios } from './persistencia'
 import { sumarMeses, partes } from '../utils/fechas'
 import { PERFILES } from '../config/constantes'
 
@@ -69,12 +69,21 @@ export async function iniciarDatos() {
   guardarLocal(estado)
 }
 
-/** Vuelve a leer Supabase (por si otra persona hizo cambios). Espera a los envíos pendientes. */
+// Huella de los datos (sin importar el orden) para saber si algo cambió de verdad
+const huella = (e) => JSON.stringify([e.recibos, e.prestamos, e.historial].map((l) => [...l].sort((a, b) => (a.id < b.id ? -1 : 1))))
+let version = 0 // sube con cada cambio local: así una lectura vieja nunca pisa un cambio recién hecho
+
+/** Vuelve a leer Supabase (cambios hechos desde otros dispositivos). Espera a los envíos pendientes. */
 export function refrescar() {
   if (!usaNube) return
   cola = cola.then(async () => {
+    const v = version
     try {
-      estado = { ...estado, ...(await leerNube()) }
+      const remoto = await leerNube()
+      if (v !== version) return // hubo un cambio local mientras se leía: la próxima lectura lo recoge
+      const nuevo = { ...estado, ...remoto }
+      if (huella(nuevo) === huella(estado)) return // nada cambió: no se redibuja
+      estado = nuevo
       notificar()
     } catch {
       /* sin conexión: se mantiene lo que ya se ve */
@@ -82,9 +91,26 @@ export function refrescar() {
   })
 }
 
+/**
+ * Mantiene todos los dispositivos al día: Supabase Realtime avisa al instante y, por si el
+ * tiempo real no estuviera activado, se vuelve a leer cada 10 segundos mientras la app se ve.
+ */
+export function iniciarSincronizacion() {
+  if (!usaNube) return
+  let espera
+  suscribirCambios(() => {
+    clearTimeout(espera)
+    espera = setTimeout(refrescar, 250)
+  })
+  setInterval(() => {
+    if (document.visibilityState === 'visible') refrescar()
+  }, 10000)
+}
+
 function publicar(nuevo) {
   const previo = estado
   estado = nuevo
+  version++
   if (usaNube) {
     cola = cola
       .then(() => sincronizarNube(previo, nuevo))
@@ -310,6 +336,7 @@ export function resumenPrestamo(prestamo, recibos = estado.recibos) {
     pagadas: pagadas.length,
     total: cuotas.length,
     saldo: pendientes.reduce((s, c) => s + c.monto, 0),
+    totalCuotas: Math.round(cuotas.reduce((s, c) => s + c.monto, 0) * 100) / 100, // suma de todas las cuotas
     proximo: pendientes[0]?.fechaLimite ?? null,
   }
 }

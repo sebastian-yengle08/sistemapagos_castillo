@@ -44,7 +44,7 @@ const TABLAS = ['prestamos', 'recibos', 'historial']
 export async function leerNube() {
   const salida = {}
   for (const t of TABLAS) {
-    const { data, error } = await nube.from(t).select('*').limit(10000)
+    const { data, error } = await nube.from(t).select('*').order('id').limit(10000)
     if (error) throw new Error(`${t}: ${error.message}`)
     salida[t] = data.map(mapas[t].deFila)
   }
@@ -90,4 +90,13 @@ export async function guardarSuscripcion(sub, perfil) {
     perfil: perfil === 'gerente' ? 'Gerente' : 'Asistente',
   })
   if (error) throw new Error(`suscripciones: ${error.message}`)
+}
+
+/** Avisa (callback) cada vez que alguien cambia datos en Supabase, desde cualquier dispositivo. */
+export function suscribirCambios(alCambiar) {
+  if (!nube) return () => {}
+  let canal = nube.channel('pagos-castillo-cambios')
+  for (const t of TABLAS) canal = canal.on('postgres_changes', { event: '*', schema: 'public', table: t }, alCambiar)
+  canal.subscribe()
+  return () => nube.removeChannel(canal)
 }

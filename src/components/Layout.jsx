@@ -66,36 +66,36 @@ export default function Layout() {
   const menu = MENU[perfil]
   const esEscritorio = useEsEscritorio()
   const nombre = perfil === 'asistente' ? 'Asistente' : 'Gerente'
-  // En escritorio "Nuevo recibo" es un botón aparte (no se repite dentro del menú)
-  const menuSuperior = menu.filter((m) => m.t !== 'Nuevo recibo')
 
   return (
     <div className="min-h-screen">
       {esEscritorio ? (
         /* ── Escritorio: barra superior con el menú centrado ── */
         <header className="sticky top-0 z-30 bg-marino text-white shadow-sm">
-          <div className="mx-auto grid h-16 max-w-[1280px] grid-cols-[1fr_auto_1fr] items-center gap-4 px-8">
+          <div className="mx-auto grid h-16 max-w-[1280px] grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-4 px-8">
             <div className="justify-self-start">
               <Logo />
             </div>
+            {/* Todos los botones del menú (incluido "Nuevo recibo" del asistente) quedan juntos y centrados */}
             <nav aria-label="Menú principal" className="flex items-center gap-1">
-              {menuSuperior.map(({ a, t, fin }) => (
-                <NavLink
-                  key={a}
-                  to={a}
-                  end={fin}
-                  className={({ isActive }) => `rounded-lg px-4 py-2 text-base font-semibold transition-colors ${isActive ? 'bg-white/15 text-white' : 'text-white/80 hover:bg-white/10 hover:text-white'}`}
-                >
-                  {t}
-                </NavLink>
-              ))}
+              {menu.map(({ a, t, fin }) =>
+                t === 'Nuevo recibo' ? (
+                  <NavLink key={a} to={a} className="ml-2 inline-flex min-h-10 items-center gap-1.5 rounded-full bg-white px-4 text-base font-bold text-marino transition hover:bg-slate-100 active:scale-[0.98]">
+                    <Plus size={18} aria-hidden="true" /> {t}
+                  </NavLink>
+                ) : (
+                  <NavLink
+                    key={a}
+                    to={a}
+                    end={fin}
+                    className={({ isActive }) => `rounded-lg px-4 py-2 text-base font-semibold transition-colors ${isActive ? 'bg-white/15 text-white' : 'text-white/80 hover:bg-white/10 hover:text-white'}`}
+                  >
+                    {t}
+                  </NavLink>
+                ),
+              )}
             </nav>
             <div className="flex items-center justify-self-end gap-2">
-              {perfil === 'asistente' && (
-                <Link to="/recibos/nuevo" className="mr-1 inline-flex min-h-11 items-center gap-2 rounded-full bg-white px-5 font-bold text-marino transition hover:bg-slate-100 active:scale-[0.98]">
-                  <Plus size={18} aria-hidden="true" /> Nuevo recibo
-                </Link>
-              )}
               <Campana avisos={avisos} />
               <span className="px-2 text-base font-semibold text-white/90">{nombre}</span>
               <button type="button" onClick={bloquear} className="inline-flex min-h-11 items-center gap-2 rounded-lg px-3 font-semibold text-white/90 hover:bg-white/10 hover:text-white">

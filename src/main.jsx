@@ -4,7 +4,7 @@ import { BrowserRouter } from 'react-router-dom'
 import './index.css'
 import App from './App.jsx'
 import { AuthProvider } from './context/AuthContext.jsx'
-import { iniciarDatos, refrescar } from './data/store'
+import { iniciarDatos, iniciarSincronizacion, refrescar } from './data/store'
 import { registrarServiceWorker } from './utils/notificaciones'
 
 const raiz = createRoot(document.getElementById('root'))
@@ -16,6 +16,7 @@ raiz.render(
 
 // Primero se cargan los datos (Supabase o localStorage) y luego se muestra la app
 iniciarDatos().then(() => {
+  iniciarSincronizacion() // los cambios de otros dispositivos aparecen solos
   raiz.render(
     <StrictMode>
       <BrowserRouter>

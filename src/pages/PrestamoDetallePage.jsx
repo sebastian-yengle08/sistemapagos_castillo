@@ -40,7 +40,7 @@ export default function PrestamoDetallePage() {
       <div className="mt-4 grid gap-3 sm:grid-cols-3">
         <Tarjeta className="p-4">
           <p className="text-sm text-suave">Monto total</p>
-          <p className="text-2xl font-bold">{formatoSoles(p.montoTotal)}</p>
+          <p className="text-2xl font-bold">{formatoSoles(s.totalCuotas)}</p>
         </Tarjeta>
         <Tarjeta className="p-4">
           <p className="text-sm text-suave">Cuotas pagadas</p>

@@ -69,7 +69,7 @@ export function crearDatosEjemplo() {
   const prestamo = {
     id: nuevoId('p'),
     entidad: 'Banco de Crédito',
-    montoTotal: 12000,
+    montoTotal: 12900, // 6 cuotas × S/ 2,150.00
     numCuotas: 6,
     montoCuota: 2150,
     primeraFecha: primera,

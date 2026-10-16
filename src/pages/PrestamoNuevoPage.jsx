@@ -11,7 +11,6 @@ export default function PrestamoNuevoPage() {
   const navegar = useNavigate()
   const hoy = hoyISO() // fecha de hoy en Lima
   const [entidad, setEntidad] = useState('')
-  const [total, setTotal] = useState('')
   const [num, setNum] = useState('')
   const [cuota, setCuota] = useState('')
   const [primera, setPrimera] = useState(hoy)
@@ -20,6 +19,8 @@ export default function PrestamoNuevoPage() {
   const nCuotas = Number(num)
   const mCuota = leerMonto(cuota)
   const cuotasOk = Number.isInteger(nCuotas) && nCuotas >= 1 && nCuotas <= 120 && mCuota > 0 && !!primera
+  // El monto total NO se escribe: es siempre (número de cuotas × monto de cada cuota)
+  const montoTotal = Number.isInteger(nCuotas) && nCuotas > 0 && mCuota > 0 ? Math.round(nCuotas * mCuota * 100) / 100 : 0
 
   // La vista previa se actualiza sola mientras se llenan los datos
   const vista = useMemo(() => (cuotasOk ? calcularCuotas({ numCuotas: nCuotas, montoCuota: mCuota, primeraFecha: primera }) : []), [cuotasOk, nCuotas, mCuota, primera])
@@ -28,14 +29,13 @@ export default function PrestamoNuevoPage() {
     e.preventDefault()
     const er = {}
     if (!entidad.trim()) er.entidad = 'Escribe el banco o la entidad.'
-    if (!(leerMonto(total) > 0)) er.total = 'Escribe el monto total del préstamo.'
     if (!(Number.isInteger(nCuotas) && nCuotas >= 1 && nCuotas <= 120)) er.num = 'Escribe cuántas cuotas son (de 1 a 120).'
     if (!(mCuota > 0)) er.cuota = 'Escribe el monto de cada cuota.'
     if (!primera) er.primera = 'Elige la fecha de la primera cuota.'
     else if (primera < hoy) er.primera = 'La fecha de la primera cuota no puede ser anterior a hoy'
     setErrores(er)
     if (Object.keys(er).length) return
-    const p = crearPrestamo({ entidad, montoTotal: leerMonto(total), numCuotas: nCuotas, montoCuota: mCuota, primeraFecha: primera })
+    const p = crearPrestamo({ entidad, montoTotal, numCuotas: nCuotas, montoCuota: mCuota, primeraFecha: primera })
     navegar(`/prestamos/${p.id}`, { replace: true, state: { aviso: 'Préstamo guardado y cuotas creadas' } })
   }
 
@@ -45,19 +45,13 @@ export default function PrestamoNuevoPage() {
         <ArrowLeft size={20} aria-hidden="true" /> Volver
       </Link>
       <h1 className="text-2xl font-bold sm:text-3xl">Nuevo préstamo</h1>
-      <p className="mt-1 text-suave">Escribe la cuota tal como la cobra el banco: el sistema no calcula intereses.</p>
+      <p className="mt-1 text-suave">Escribe la cuota tal como la cobra el banco: el sistema no calcula intereses, solo suma las cuotas para obtener el monto total.</p>
 
       <form noValidate onSubmit={guardar} className="mt-5 flex flex-col gap-5 rounded-2xl border border-borde bg-sup p-4 sm:p-6">
         <Campo etiqueta="Banco o entidad" id="p-ent" error={errores.entidad}>
           <input id="p-ent" value={entidad} onChange={(e) => setEntidad(e.target.value)} placeholder="Ej.: Banco de Crédito" className={claseInput(errores.entidad)} />
         </Campo>
         <div className="grid gap-5 sm:grid-cols-2">
-          <Campo etiqueta="Monto total del préstamo" id="p-tot" error={errores.total}>
-            <div className="relative">
-              <span className="absolute left-4 top-1/2 -translate-y-1/2 font-semibold text-suave">S/</span>
-              <input id="p-tot" inputMode="decimal" value={total} onChange={(e) => setTotal(e.target.value)} placeholder="0.00" className={`${claseInput(errores.total)} pl-11`} />
-            </div>
-          </Campo>
           <Campo etiqueta="Número de cuotas" id="p-num" error={errores.num}>
             <input id="p-num" inputMode="numeric" value={num} onChange={(e) => setNum(e.target.value.replace(/\D/g, ''))} placeholder="Ej.: 12" className={claseInput(errores.num)} />
           </Campo>
@@ -70,6 +64,15 @@ export default function PrestamoNuevoPage() {
           <Campo etiqueta="Fecha de la primera cuota" id="p-fec" error={errores.primera}>
             <input id="p-fec" type="date" min={hoy} value={primera} onChange={(e) => setPrimera(e.target.value)} className={claseInput(errores.primera)} />
           </Campo>
+        </div>
+
+        {/* Monto total calculado automáticamente */}
+        <div className="flex items-center justify-between gap-3 rounded-2xl bg-brand/10 px-4 py-3" aria-live="polite">
+          <div>
+            <p className="font-semibold">Monto total del préstamo</p>
+            <p className="text-sm text-suave">{montoTotal > 0 ? `${nCuotas} cuotas × ${formatoSoles(mCuota)}` : 'Se calcula con el número de cuotas y el monto de cada cuota'}</p>
+          </div>
+          <p className="text-2xl font-bold text-brand">{formatoSoles(montoTotal)}</p>
         </div>
 
         {/* Vista previa de las cuotas que se crearán */}

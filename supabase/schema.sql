@@ -63,3 +63,16 @@ create table if not exists public.suscripciones (
 alter table public.suscripciones enable row level security;
 drop policy if exists "prototipo suscripciones" on public.suscripciones;
 create policy "prototipo suscripciones" on public.suscripciones for all to anon using (true) with check (true);
+
+-- Tiempo real: los cambios se ven al instante en todos los dispositivos.
+-- (Si no se ejecuta, la app igual se actualiza sola cada 10 segundos.)
+do $$
+declare t text;
+begin
+  foreach t in array array['recibos','prestamos','historial'] loop
+    begin
+      execute format('alter publication supabase_realtime add table public.%I', t);
+    exception when duplicate_object then null;
+    end;
+  end loop;
+end $$;
