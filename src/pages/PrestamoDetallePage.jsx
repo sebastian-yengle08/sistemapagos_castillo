@@ -69,7 +69,7 @@ export default function PrestamoDetallePage() {
             {s.cuotas.map((c) => (
               <tr key={c.id} className="border-t border-borde">
                 <td className="px-4 py-3 font-semibold">
-                  <Link to={`/recibos/${c.id}`} className="text-brand underline-offset-2 hover:underline">
+                  <Link to={`/recibos/${c.id}`} state={{ origen: `/prestamos/${p.id}` }} className="text-brand underline-offset-2 hover:underline">
                     {c.cuota} de {s.total}
                   </Link>
                 </td>

@@ -1,4 +1,5 @@
 // Marco de la aplicación: barra lateral (escritorio), barra superior y navegación inferior (celular).
+import { useSyncExternalStore } from 'react'
 import { NavLink, Outlet, Link, useLocation } from 'react-router-dom'
 import { Bell, CalendarDays, FilePlus2, Landmark, History, Lock, Building2, Plus } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
@@ -21,6 +22,19 @@ const MENU = {
   ],
 }
 
+/** true en pantallas de escritorio (>= 1024 px). Se usa para dibujar UNA sola navegación, no las dos. */
+function useEsEscritorio() {
+  const consulta = '(min-width: 1024px)'
+  return useSyncExternalStore(
+    (avisar) => {
+      const m = window.matchMedia(consulta)
+      m.addEventListener('change', avisar)
+      return () => m.removeEventListener('change', avisar)
+    },
+    () => window.matchMedia(consulta).matches,
+  )
+}
+
 function Logo({ chico }) {
   return (
     <Link to="/" className="flex items-center gap-2 sm:gap-3" aria-label="Pagos Castillo, ir al calendario">
@@ -41,12 +55,16 @@ export default function Layout() {
   const { pathname } = useLocation()
   const avisos = agruparAvisos(recibos, hoyISO()).total
   const menu = MENU[perfil]
+  const esEscritorio = useEsEscritorio()
+  // En escritorio "Nuevo recibo" es el botón principal de la barra lateral (no se repite en el menú)
+  const menuLateral = menu.filter((m) => m.t !== 'Nuevo recibo')
   const nombre = perfil === 'asistente' ? 'Asistente' : 'Gerente'
 
   return (
-    <div className="min-h-screen lg:pl-72">
+    <div className={`min-h-screen ${esEscritorio ? 'pl-72' : ''}`}>
       {/* Barra lateral fija: solo escritorio */}
-      <aside className="fixed inset-y-0 left-0 hidden w-72 flex-col border-r border-borde bg-lienzo2 p-5 lg:flex">
+      {esEscritorio && (
+      <aside className="fixed inset-y-0 left-0 flex w-72 flex-col border-r border-borde bg-lienzo2 p-5">
         <Logo />
         {perfil === 'asistente' && (
           <Link to="/recibos/nuevo" className="mt-6 flex min-h-14 items-center justify-center gap-2 rounded-full bg-brand text-lg font-bold text-white shadow-[inset_0_1px_0_rgba(255,255,255,.2),0_8px_24px_-6px_rgba(10,132,255,.65)] transition hover:brightness-110 active:scale-[0.98]">
@@ -54,7 +72,7 @@ export default function Layout() {
           </Link>
         )}
         <nav className="mt-6 flex flex-col gap-1" aria-label="Menú principal">
-          {menu.map(({ a, t, I, fin }) => (
+          {menuLateral.map(({ a, t, I, fin }) => (
             <NavLink
               key={a}
               to={a}
@@ -72,15 +90,17 @@ export default function Layout() {
         </nav>
         <p className="mt-auto text-sm text-suave">Sesión de {nombre}</p>
       </aside>
+      )}
 
       {/* Barra superior */}
       <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-borde bg-lienzo2/80 px-3 backdrop-blur sm:px-4 lg:px-8">
-        <div className="lg:hidden">
+        {esEscritorio ? (
+          <p className="text-base text-suave">
+            Hola, <span className="font-bold text-tinta">{nombre}</span>
+          </p>
+        ) : (
           <Logo chico />
-        </div>
-        <p className="hidden text-base text-suave lg:block">
-          Hola, <span className="font-bold text-tinta">{nombre}</span>
-        </p>
+        )}
         <div className="flex items-center gap-2">
           <Link to="/avisos" aria-label={`Avisos: ${avisos}`} className="relative grid h-11 w-11 place-items-center rounded-full sm:h-12 sm:w-12 text-suave hover:bg-white/10">
             <Bell size={24} aria-hidden="true" />
@@ -101,7 +121,8 @@ export default function Layout() {
       </main>
 
       {/* Navegación inferior flotante (vidrio): solo celular. "Nuevo recibo" es el botón central destacado */}
-      <nav aria-label="Menú principal" className="fixed inset-x-3 bottom-3 z-30 flex items-end justify-around rounded-[28px] border border-white/10 bg-sup/80 px-2 pb-1 shadow-[0_8px_32px_-4px_rgba(0,0,0,.6)] backdrop-blur-xl lg:hidden">
+      {!esEscritorio && (
+      <nav aria-label="Menú principal" className="fixed inset-x-3 bottom-3 z-30 flex items-end justify-around rounded-[28px] border border-white/10 bg-sup/80 px-2 pb-1 shadow-[0_8px_32px_-4px_rgba(0,0,0,.6)] backdrop-blur-xl">
         {menu.map(({ a, t, I, fin }) =>
           t === 'Nuevo recibo' ? (
             <NavLink key={a} to={a} className="-mt-6 flex min-h-16 flex-1 flex-col items-center justify-end gap-0.5 text-xs font-semibold text-tinta">
@@ -119,6 +140,7 @@ export default function Layout() {
           ),
         )}
       </nav>
+      )}
     </div>
   )
 }

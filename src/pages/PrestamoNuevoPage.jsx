@@ -9,11 +9,12 @@ import { formatoSoles, leerMonto } from '../utils/dinero'
 
 export default function PrestamoNuevoPage() {
   const navegar = useNavigate()
+  const hoy = hoyISO() // fecha de hoy en Lima
   const [entidad, setEntidad] = useState('')
   const [total, setTotal] = useState('')
   const [num, setNum] = useState('')
   const [cuota, setCuota] = useState('')
-  const [primera, setPrimera] = useState(hoyISO())
+  const [primera, setPrimera] = useState(hoy)
   const [errores, setErrores] = useState({})
 
   const nCuotas = Number(num)
@@ -31,15 +32,16 @@ export default function PrestamoNuevoPage() {
     if (!(Number.isInteger(nCuotas) && nCuotas >= 1 && nCuotas <= 120)) er.num = 'Escribe cuántas cuotas son (de 1 a 120).'
     if (!(mCuota > 0)) er.cuota = 'Escribe el monto de cada cuota.'
     if (!primera) er.primera = 'Elige la fecha de la primera cuota.'
+    else if (primera < hoy) er.primera = 'La fecha de la primera cuota no puede ser anterior a hoy'
     setErrores(er)
     if (Object.keys(er).length) return
     const p = crearPrestamo({ entidad, montoTotal: leerMonto(total), numCuotas: nCuotas, montoCuota: mCuota, primeraFecha: primera })
-    navegar(`/prestamos/${p.id}`, { state: { aviso: 'Préstamo guardado y cuotas creadas' } })
+    navegar(`/prestamos/${p.id}`, { replace: true, state: { aviso: 'Préstamo guardado y cuotas creadas' } })
   }
 
   return (
     <div className="mx-auto max-w-2xl">
-      <Link to="/prestamos" className="mb-3 inline-flex min-h-12 items-center gap-1 font-semibold text-brand">
+      <Link to="/prestamos" replace className="mb-3 inline-flex min-h-12 items-center gap-1 font-semibold text-brand">
         <ArrowLeft size={20} aria-hidden="true" /> Volver
       </Link>
       <h1 className="text-2xl font-bold sm:text-3xl">Nuevo préstamo</h1>
@@ -66,7 +68,7 @@ export default function PrestamoNuevoPage() {
             </div>
           </Campo>
           <Campo etiqueta="Fecha de la primera cuota" id="p-fec" error={errores.primera}>
-            <input id="p-fec" type="date" value={primera} onChange={(e) => setPrimera(e.target.value)} className={claseInput(errores.primera)} />
+            <input id="p-fec" type="date" min={hoy} value={primera} onChange={(e) => setPrimera(e.target.value)} className={claseInput(errores.primera)} />
           </Campo>
         </div>
 
@@ -104,7 +106,7 @@ export default function PrestamoNuevoPage() {
         </section>
 
         <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-          <Boton onClick={() => navegar('/prestamos')}>Cancelar</Boton>
+          <Boton onClick={() => navegar('/prestamos', { replace: true })}>Cancelar</Boton>
           <Boton variante="primario" type="submit" className="sm:min-w-56">
             Guardar préstamo
           </Boton>

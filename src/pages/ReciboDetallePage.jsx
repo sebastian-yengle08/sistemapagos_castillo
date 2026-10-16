@@ -1,10 +1,12 @@
-// Detalle de un recibo. Asistente: registrar pago, editar, eliminar. Gerente: solo consulta.
+// Detalle de un recibo.
+// Asistente: Pendiente/Vencido → registrar pago, editar, eliminar. Pagado → corregir o anular el pago.
+// Cuotas de préstamo: no se editan ni eliminan. Gerente: solo consulta.
 import { useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, CheckCircle2, Pencil, Trash2, Wallet, FileX, Banknote } from 'lucide-react'
+import { ArrowLeft, CheckCircle2, Pencil, Trash2, Wallet, FileX, Banknote, Undo2 } from 'lucide-react'
 import { useDatos } from '../data/useDatos'
 import { useAuth } from '../context/AuthContext'
-import { eliminarRecibo } from '../data/store'
+import { anularPago, eliminarRecibo } from '../data/store'
 import { Boton, Insignia, Tarjeta, Ventana, Vacio } from '../components/ui'
 import RegistrarPagoModal from '../components/RegistrarPagoModal'
 import { iconoDeTipo } from '../components/ReciboFila'
@@ -28,14 +30,22 @@ export default function ReciboDetallePage() {
   const navegar = useNavigate()
   const { state } = useLocation()
   const [pagando, setPagando] = useState(false)
+  const [corrigiendo, setCorrigiendo] = useState(false)
   const [eliminando, setEliminando] = useState(false)
+  const [anulando, setAnulando] = useState(false)
+
+  // Pantalla de la que se vino (calendario, avisos, préstamo, historial); por defecto el calendario
+  const origen = state?.origen ?? '/'
+  const volver = () => navegar(origen, { replace: true })
+  // Recarga este mismo detalle reemplazando la entrada actual (no agrega historial del navegador)
+  const recargarDetalle = (aviso) => navegar(`/recibos/${id}`, { replace: true, state: { origen, aviso } })
 
   const r = recibos.find((x) => x.id === id)
   if (!r) {
     return (
       <div className="mx-auto max-w-lg">
         <Vacio icono={FileX} titulo="No encontramos este recibo" texto="Es posible que ya haya sido eliminado.">
-          <Link to="/" className="mt-3 inline-flex min-h-12 items-center rounded-xl bg-brand px-5 font-semibold text-white">
+          <Link to="/" replace className="mt-3 inline-flex min-h-12 items-center rounded-full bg-brand px-5 font-semibold text-white">
             Ir al calendario
           </Link>
         </Vacio>
@@ -48,12 +58,13 @@ export default function ReciboDetallePage() {
   const Icono = iconoDeTipo(r.tipo)
   const esAsistente = perfil === 'asistente'
   const esCuota = !!r.prestamoId
+  const pagado = r.estado === 'Pagado'
   const dias = diasEntre(hoy, r.fechaLimite)
   const nota = estado === 'Vencido' ? `Venció hace ${-dias} ${-dias === 1 ? 'día' : 'días'}` : estado === 'Pendiente' ? (dias === 0 ? 'Vence hoy' : `Vence en ${dias} ${dias === 1 ? 'día' : 'días'}`) : null
 
   return (
     <div className="mx-auto max-w-2xl">
-      <button type="button" onClick={() => navegar(-1)} className="mb-3 inline-flex min-h-12 items-center gap-1 font-semibold text-brand">
+      <button type="button" onClick={volver} className="mb-3 inline-flex min-h-12 items-center gap-1 font-semibold text-brand">
         <ArrowLeft size={20} aria-hidden="true" /> Volver
       </button>
 
@@ -88,7 +99,7 @@ export default function ReciboDetallePage() {
         </dl>
       </Tarjeta>
 
-      {/* Pago realizado */}
+      {/* Pago realizado (con la fecha real de pago) */}
       {r.pago && (
         <Tarjeta className="mt-4 border-pag-bd bg-pag-bg/40 p-5">
           <h2 className="flex items-center gap-2 text-lg font-bold text-pag-tx">
@@ -103,32 +114,65 @@ export default function ReciboDetallePage() {
         </Tarjeta>
       )}
 
-      {/* Acciones del asistente */}
+      {/* Acciones del asistente según el estado */}
       {esAsistente && (
         <div className="mt-5 flex flex-col gap-3">
-          {r.estado !== 'Pagado' && (
+          {!pagado && (
             <Boton variante="primario" grande onClick={() => setPagando(true)}>
               <Wallet size={22} aria-hidden="true" /> Registrar pago
             </Boton>
           )}
-          {!esCuota ? (
+
+          {pagado && (
             <div className="grid grid-cols-2 gap-3">
-              <Boton onClick={() => navegar(`/recibos/${r.id}/editar`)}>
+              <Boton onClick={() => setCorrigiendo(true)}>
+                <Pencil size={18} aria-hidden="true" /> Corregir pago
+              </Boton>
+              <Boton onClick={() => setAnulando(true)} className="!text-venc-tx">
+                <Undo2 size={18} aria-hidden="true" /> Anular pago
+              </Boton>
+            </div>
+          )}
+
+          {!pagado && !esCuota && (
+            <div className="grid grid-cols-2 gap-3">
+              <Boton onClick={() => navegar(`/recibos/${r.id}/editar`, { state: { origen } })}>
                 <Pencil size={18} aria-hidden="true" /> Editar
               </Boton>
               <Boton onClick={() => setEliminando(true)} className="!text-venc-tx">
                 <Trash2 size={18} aria-hidden="true" /> Eliminar
               </Boton>
             </div>
-          ) : (
+          )}
+
+          {esCuota && (
             <p className="flex items-center gap-2 rounded-xl bg-white/[.06] p-3 text-sm text-suave">
-              <Banknote size={18} aria-hidden="true" /> Esta cuota viene de un préstamo: solo se puede pagar.
+              <Banknote size={18} aria-hidden="true" /> Esta cuota viene de un préstamo: solo se puede pagar, corregir o anular su pago.
             </p>
           )}
+          {pagado && !esCuota && <p className="text-sm text-suave">Para eliminar este recibo, primero anula el pago.</p>}
         </div>
       )}
 
-      {pagando && <RegistrarPagoModal recibo={r} onCerrar={() => setPagando(false)} />}
+      {pagando && (
+        <RegistrarPagoModal
+          recibo={r}
+          onCerrar={() => {
+            setPagando(false)
+            recargarDetalle()
+          }}
+        />
+      )}
+      {corrigiendo && (
+        <RegistrarPagoModal
+          recibo={r}
+          modo="corregir"
+          onCerrar={() => {
+            setCorrigiendo(false)
+            recargarDetalle()
+          }}
+        />
+      )}
 
       <Ventana abierta={eliminando} onCerrar={() => setEliminando(false)} titulo="Eliminar recibo">
         <h2 className="text-xl font-bold">¿Está seguro de eliminar este recibo?</h2>
@@ -145,6 +189,24 @@ export default function ReciboDetallePage() {
             }}
           >
             Sí, eliminar
+          </Boton>
+        </div>
+      </Ventana>
+
+      <Ventana abierta={anulando} onCerrar={() => setAnulando(false)} titulo="Anular pago">
+        <h2 className="text-xl font-bold">¿Anular este pago?</h2>
+        <p className="mt-2 text-suave">El recibo volverá a Pendiente. Luego se puede registrar el pago de nuevo.</p>
+        <div className="mt-5 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+          <Boton onClick={() => setAnulando(false)}>Cancelar</Boton>
+          <Boton
+            variante="peligro"
+            onClick={() => {
+              anularPago(r.id)
+              setAnulando(false)
+              recargarDetalle('Pago anulado')
+            }}
+          >
+            Sí, anular pago
           </Boton>
         </div>
       </Ventana>

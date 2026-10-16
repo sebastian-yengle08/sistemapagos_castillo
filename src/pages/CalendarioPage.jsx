@@ -1,6 +1,6 @@
 // HU-06: calendario mensual (pantalla principal de ambos perfiles).
 import { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { Plus } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { ChevronLeft, ChevronRight, CalendarOff, Clock, CheckCircle2, AlertCircle, X } from 'lucide-react'
@@ -34,6 +34,7 @@ function Contador({ titulo, valor, Icono, clase }) {
 export default function CalendarioPage() {
   const { recibos } = useDatos()
   const { perfil } = useAuth()
+  const { state } = useLocation()
   const hoy = hoyISO()
   const h = partes(hoy)
   const [vista, setVista] = useState({ a: h.a, m: h.m })
@@ -90,7 +91,7 @@ export default function CalendarioPage() {
       </span>
     </div>
   )
-  const agregarDia = dia && perfil === 'asistente' && (
+  const agregarDia = dia && dia >= hoy && perfil === 'asistente' && (
     <Link to={`/recibos/nuevo?fecha=${dia}`} className="mt-3 flex min-h-12 items-center justify-center gap-2 rounded-full bg-brand font-semibold text-white shadow-[inset_0_1px_0_rgba(255,255,255,.2),0_6px_20px_-6px_rgba(10,132,255,.6)] hover:brightness-110">
       <Plus size={20} aria-hidden="true" /> Agregar recibo a este día
     </Link>
@@ -122,6 +123,11 @@ export default function CalendarioPage() {
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
       <div className="min-w-0">
+        {state?.aviso && (
+          <p role="status" className="mb-3 flex items-center gap-2 rounded-xl border border-pag-bd bg-pag-bg px-4 py-3 font-semibold text-pag-tx">
+            <CheckCircle2 size={20} aria-hidden="true" /> {state.aviso}
+          </p>
+        )}
         {/* Navegación de mes */}
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center rounded-xl border border-borde bg-sup">
@@ -266,7 +272,7 @@ function ReciboDia({ r, hoy }) {
           <span className={`h-2 w-2 rounded-full ${PUNTO[estado]}`} aria-hidden="true" />
           {estado}
         </span>
-        <Link to={`/recibos/${r.id}`} className="inline-flex min-h-12 items-center rounded-full border border-borde bg-white/[.06] px-4 font-semibold text-brand hover:bg-white/[.12]">
+        <Link to={`/recibos/${r.id}`} state={{ origen: '/' }} className="inline-flex min-h-12 items-center rounded-full border border-borde bg-white/[.06] px-4 font-semibold text-brand hover:bg-white/[.12]">
           Ver detalle
         </Link>
       </div>

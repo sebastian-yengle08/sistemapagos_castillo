@@ -1,6 +1,6 @@
 // HU-12: historial de acciones (gerente). Solo lectura: sin filtros, buscador ni botones.
 import { useMemo } from 'react'
-import { LogIn, FilePlus2, Pencil, Trash2, Wallet, Landmark, History } from 'lucide-react'
+import { LogIn, FilePlus2, Pencil, Trash2, Wallet, Landmark, History, Undo2 } from 'lucide-react'
 import { useDatos } from '../data/useDatos'
 import { Tarjeta, Vacio } from '../components/ui'
 import { fechaLarga, fechaLimaDeInstante, horaLima, hoyISO, nombreDia, sumarDias } from '../utils/fechas'
@@ -12,6 +12,8 @@ const ICONOS = {
   eliminar: [Trash2, 'bg-venc-bg text-venc-tx'],
   pago: [Wallet, 'bg-pag-bg text-pag-tx'],
   prestamo: [Landmark, 'bg-brand/10 text-brand'],
+  'corregir-pago': [Pencil, 'bg-pend-bg text-pend-tx'],
+  'anular-pago': [Undo2, 'bg-venc-bg text-venc-tx'],
 }
 
 function tituloDia(fecha, hoy) {

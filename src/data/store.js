@@ -177,7 +177,8 @@ const ETIQUETAS_CAMPO = { tipo: 'el tipo', empresa: 'la empresa', codigo: 'el c�
 
 export function editarRecibo(id, cambios) {
   const actual = obtenerRecibo(id)
-  if (!actual || actual.prestamoId) return null // las cuotas de préstamo no se editan
+  // Las cuotas de préstamo y los recibos pagados no se editan (un pagado se corrige con corregirPago)
+  if (!actual || actual.prestamoId || actual.estado === 'Pagado') return null
   const nuevo = { ...actual, ...cambios, empresa: (cambios.empresa ?? actual.empresa).trim(), codigo: (cambios.codigo ?? actual.codigo).trim() }
   const tocados = Object.keys(ETIQUETAS_CAMPO).filter((k) => (actual[k] ?? null) !== (nuevo[k] ?? null))
   const texto = tocados.length === 1
@@ -193,7 +194,8 @@ export function editarRecibo(id, cambios) {
 
 export function eliminarRecibo(id) {
   const actual = obtenerRecibo(id)
-  if (!actual || actual.prestamoId) return false
+  // No se eliminan cuotas de préstamo ni recibos pagados (primero hay que anular el pago)
+  if (!actual || actual.prestamoId || actual.estado === 'Pagado') return false
   publicar({
     ...estado,
     recibos: estado.recibos.filter((r) => r.id !== id),
@@ -217,6 +219,35 @@ export function registrarPago(id, datos) {
     historial: anotar(estado.historial, 'pago', `Registró el pago del recibo de ${actual.empresa}`),
   })
   return pagado
+}
+
+/** Corrige los datos de un pago ya registrado. datos: { monto, fecha, medio, comprobante } */
+export function corregirPago(id, datos) {
+  const actual = obtenerRecibo(id)
+  if (!actual || actual.estado !== 'Pagado') return null
+  const corregido = {
+    ...actual,
+    pago: { monto: datos.monto, fecha: datos.fecha, medio: datos.medio, comprobante: (datos.comprobante ?? '').trim() },
+  }
+  publicar({
+    ...estado,
+    recibos: estado.recibos.map((r) => (r.id === id ? corregido : r)),
+    historial: anotar(estado.historial, 'corregir-pago', `Corrigió el pago del recibo de ${actual.empresa}`),
+  })
+  return corregido
+}
+
+/** Anula el pago: se borran sus datos y el recibo vuelve a Pendiente (o Vencido si ya pasó su fecha). */
+export function anularPago(id) {
+  const actual = obtenerRecibo(id)
+  if (!actual || actual.estado !== 'Pagado') return null
+  const anulado = { ...actual, estado: 'Pendiente', pago: null }
+  publicar({
+    ...estado,
+    recibos: estado.recibos.map((r) => (r.id === id ? anulado : r)),
+    historial: anotar(estado.historial, 'anular-pago', `Anuló el pago del recibo de ${actual.empresa}`),
+  })
+  return anulado
 }
 
 // ── Préstamos ───────────────────────────────────────────────────────────────

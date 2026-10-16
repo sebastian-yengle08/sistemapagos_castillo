@@ -1,45 +1,56 @@
 // HU-03: ventana simple para registrar el pago, con los datos ya llenados.
 // Flujo normal en 2 toques: "Registrar pago" y luego "Confirmar pago".
+// Con modo="corregir" sirve para corregir un pago ya registrado (recibo Pagado).
 import { useState } from 'react'
 import { CheckCircle2 } from 'lucide-react'
 import { Boton, Campo, Chip, Ventana, claseInput } from './ui'
 import { MEDIOS } from '../config/constantes'
-import { registrarPago, ultimoMedioDeEmpresa } from '../data/store'
+import { corregirPago, registrarPago, ultimoMedioDeEmpresa } from '../data/store'
 import { formatoFecha, hoyISO } from '../utils/fechas'
 import { formatoSoles, leerMonto } from '../utils/dinero'
 
-export default function RegistrarPagoModal({ recibo, onCerrar }) {
+export default function RegistrarPagoModal({ recibo, modo = 'registrar', onCerrar }) {
+  const corrigiendo = modo === 'corregir'
+  const previo = corrigiendo ? recibo.pago : null
   // El último medio usado con esta empresa viene ya seleccionado (si existe)
-  const [ultimo] = useState(() => ultimoMedioDeEmpresa(recibo.empresa))
-  const [monto, setMonto] = useState(String(recibo.monto.toFixed(2)))
-  const [fecha, setFecha] = useState(hoyISO())
-  const [medio, setMedio] = useState(ultimo)
-  const [comprobante, setComprobante] = useState('')
+  const [ultimo] = useState(() => (corrigiendo ? null : ultimoMedioDeEmpresa(recibo.empresa)))
+  const [monto, setMonto] = useState((previo?.monto ?? recibo.monto).toFixed(2))
+  const [fecha, setFecha] = useState(previo?.fecha ?? hoyISO())
+  const [medio, setMedio] = useState(previo?.medio ?? ultimo)
+  const [comprobante, setComprobante] = useState(previo?.comprobante ?? '')
   const [errores, setErrores] = useState({})
   const [listo, setListo] = useState(false)
+  const hoy = hoyISO() // fecha de hoy en Lima: la fecha de pago no puede ser futura
 
   function confirmar() {
     const e = {}
     const m = leerMonto(monto)
     if (!(m > 0)) e.monto = 'Escribe un monto mayor a cero.'
     if (!fecha) e.fecha = 'Elige la fecha de pago.'
+    else if (fecha > hoy) e.fecha = 'La fecha de pago no puede ser futura'
     if (!medio) e.medio = 'Elige cómo se pagó.'
     setErrores(e)
     if (Object.keys(e).length) return
-    registrarPago(recibo.id, { monto: m, fecha, medio, comprobante })
+    const datos = { monto: m, fecha, medio, comprobante }
+    if (corrigiendo) corregirPago(recibo.id, datos)
+    else registrarPago(recibo.id, datos)
     setListo(true)
   }
 
   if (listo) {
     return (
-      <Ventana abierta onCerrar={onCerrar} titulo="Pago registrado">
+      <Ventana abierta onCerrar={onCerrar} titulo={corrigiendo ? 'Pago corregido' : 'Pago registrado'}>
         <div className="flex flex-col items-center gap-3 py-6 text-center">
           <span className="grid h-20 w-20 place-items-center rounded-full bg-pag-bg text-pag-tx">
             <CheckCircle2 size={48} aria-hidden="true" />
           </span>
-          <h2 className="text-2xl font-bold">Pago registrado</h2>
+          <h2 className="text-2xl font-bold">{corrigiendo ? 'Pago corregido' : 'Pago registrado'}</h2>
           <p className="text-suave">
-            El recibo de <b className="text-tinta">{recibo.empresa}</b> ya figura como Pagado.
+            {corrigiendo ? (
+              <>Los datos del pago de <b className="text-tinta">{recibo.empresa}</b> se actualizaron.</>
+            ) : (
+              <>El recibo de <b className="text-tinta">{recibo.empresa}</b> ya figura como Pagado.</>
+            )}
           </p>
           <Boton variante="primario" grande onClick={onCerrar} className="mt-4">
             Listo
@@ -50,10 +61,10 @@ export default function RegistrarPagoModal({ recibo, onCerrar }) {
   }
 
   return (
-    <Ventana abierta onCerrar={onCerrar} titulo="Registrar pago">
-      <h2 className="text-2xl font-bold">Registrar pago</h2>
+    <Ventana abierta onCerrar={onCerrar} titulo={corrigiendo ? 'Corregir pago' : 'Registrar pago'}>
+      <h2 className="text-2xl font-bold">{corrigiendo ? 'Corregir pago' : 'Registrar pago'}</h2>
 
-      <div className="mt-4 flex items-center justify-between gap-3 rounded-2xl bg-brand/5 p-4">
+      <div className="mt-4 flex items-center justify-between gap-3 rounded-2xl bg-brand/10 p-4">
         <div className="min-w-0">
           <p className="truncate text-lg font-bold">{recibo.empresa}</p>
           <p className="text-sm text-suave">Vence {formatoFecha(recibo.fechaLimite)}</p>
@@ -70,7 +81,7 @@ export default function RegistrarPagoModal({ recibo, onCerrar }) {
             </div>
           </Campo>
           <Campo etiqueta="Fecha de pago" id="pago-fecha" error={errores.fecha}>
-            <input id="pago-fecha" type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} className={claseInput(errores.fecha)} />
+            <input id="pago-fecha" type="date" max={hoy} value={fecha} onChange={(e) => setFecha(e.target.value)} className={claseInput(errores.fecha)} />
           </Campo>
         </div>
 
@@ -95,7 +106,7 @@ export default function RegistrarPagoModal({ recibo, onCerrar }) {
         </Campo>
 
         <Boton variante="primario" grande onClick={confirmar}>
-          Confirmar pago
+          {corrigiendo ? 'Guardar corrección' : 'Confirmar pago'}
         </Boton>
       </div>
     </Ventana>

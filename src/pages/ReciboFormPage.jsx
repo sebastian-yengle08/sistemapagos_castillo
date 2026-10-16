@@ -1,6 +1,6 @@
 // HU-01 Nuevo recibo, HU-04 Editar y HU-05 aviso de recibo repetido (solo asistente).
 import { useState } from 'react'
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, AlertTriangle } from 'lucide-react'
 import { Boton, Campo, Chip, Tarjeta, Ventana, claseInput } from '../components/ui'
 import { TIPOS } from '../config/constantes'
@@ -13,24 +13,27 @@ export default function ReciboFormPage() {
   const navegar = useNavigate()
   const editando = !!id
   const [consulta] = useSearchParams()
+  const { state } = useLocation()
+  const origen = state?.origen // pantalla de la que se vino (se conserva al volver al detalle)
+  const hoy = hoyISO() // fecha de hoy en Lima
   const [original] = useState(() => (id ? obtenerRecibo(id) : null))
 
   const [tipo, setTipo] = useState(original?.tipo ?? '')
   const [empresa, setEmpresa] = useState(original?.empresa ?? '')
   const [codigo, setCodigo] = useState(original?.codigo ?? '')
-  const [fecha, setFecha] = useState(original?.fechaLimite ?? (/^\d{4}-\d{2}-\d{2}$/.test(consulta.get('fecha') ?? '') ? consulta.get('fecha') : hoyISO()))
+  const [fecha, setFecha] = useState(original?.fechaLimite ?? (/^\d{4}-\d{2}-\d{2}$/.test(consulta.get('fecha') ?? '') && consulta.get('fecha') >= hoy ? consulta.get('fecha') : hoy))
   const [monto, setMonto] = useState(original ? original.monto.toFixed(2) : '')
   const [igv, setIgv] = useState(original?.igv != null ? original.igv.toFixed(2) : '')
   const [errores, setErrores] = useState({})
   const [duplicado, setDuplicado] = useState(null)
 
-  // Las cuotas de préstamo no se editan: solo se pagan
-  if (editando && (!original || original.prestamoId)) {
+  // Las cuotas de préstamo y los recibos pagados no se editan
+  if (editando && (!original || original.prestamoId || original.estado === 'Pagado')) {
     return (
       <Tarjeta className="mx-auto max-w-lg p-6 text-center">
-        <p className="text-lg font-bold">{original ? 'Las cuotas de un préstamo no se pueden editar' : 'No encontramos este recibo'}</p>
-        <p className="mt-1 text-suave">{original ? 'Solo se pagan desde su detalle.' : 'Es posible que ya haya sido eliminado.'}</p>
-        <Link to={original ? `/recibos/${id}` : '/'} className="mt-4 inline-flex min-h-12 items-center rounded-xl bg-brand px-5 font-semibold text-white">
+        <p className="text-lg font-bold">{!original ? 'No encontramos este recibo' : original.prestamoId ? 'Las cuotas de un préstamo no se pueden editar' : 'Un recibo pagado no se puede editar'}</p>
+        <p className="mt-1 text-suave">{!original ? 'Es posible que ya haya sido eliminado.' : original.prestamoId ? 'Solo se pagan desde su detalle.' : 'Corrige o anula el pago desde su detalle.'}</p>
+        <Link to={original ? `/recibos/${id}` : '/'} replace state={{ origen }} className="mt-4 inline-flex min-h-12 items-center rounded-full bg-brand px-5 font-semibold text-white">
           Volver
         </Link>
       </Tarjeta>
@@ -43,6 +46,8 @@ export default function ReciboFormPage() {
     if (!empresa.trim()) e.empresa = 'Escribe el nombre de la empresa.'
     if (!codigo.trim()) e.codigo = 'Escribe el código del recibo.'
     if (!fecha) e.fecha = 'Elige la fecha límite de pago.'
+    // Al editar, la fecha original se puede conservar aunque ya haya pasado; una fecha nueva no puede ser anterior a hoy
+    else if (fecha < hoy && !(editando && fecha === original.fechaLimite)) e.fecha = 'La fecha límite no puede ser anterior a hoy'
     const m = leerMonto(monto)
     if (monto.trim() === '') e.monto = 'Escribe el monto total.'
     else if (!(m > 0)) e.monto = 'Escribe un monto válido, mayor a cero.'
@@ -56,7 +61,7 @@ export default function ReciboFormPage() {
     const datos = { tipo, empresa, codigo, fechaLimite: fecha, monto: leerMonto(monto), igv: igv.trim() === '' ? null : leerMonto(igv) }
     if (editando) {
       editarRecibo(id, datos)
-      navegar(`/recibos/${id}`, { state: { aviso: 'Cambios guardados' } })
+      navegar(`/recibos/${id}`, { replace: true, state: { origen, aviso: 'Cambios guardados' } })
       return
     }
     if (!forzar) {
@@ -64,12 +69,12 @@ export default function ReciboFormPage() {
       if (previo) return setDuplicado(previo) // HU-05: avisa, pero no bloquea
     }
     const nuevo = crearRecibo(datos)
-    navegar(`/recibos/${nuevo.id}`, { state: { aviso: 'Recibo guardado' } })
+    navegar('/', { replace: true, state: { aviso: `Recibo guardado: ${nuevo.empresa}` } })
   }
 
   return (
     <div className="mx-auto max-w-2xl">
-      <Link to={editando ? `/recibos/${id}` : '/'} className="mb-3 inline-flex min-h-12 items-center gap-1 font-semibold text-brand">
+      <Link to={editando ? `/recibos/${id}` : '/'} replace state={{ origen }} className="mb-3 inline-flex min-h-12 items-center gap-1 font-semibold text-brand">
         <ArrowLeft size={20} aria-hidden="true" /> Volver
       </Link>
       <h1 className="text-2xl font-bold sm:text-3xl">{editando ? 'Editar recibo' : 'Nuevo recibo'}</h1>
@@ -106,7 +111,7 @@ export default function ReciboFormPage() {
         </Campo>
         <div className="grid gap-5 sm:grid-cols-2">
           <Campo etiqueta="Fecha límite" id="f-fecha" error={errores.fecha}>
-            <input id="f-fecha" type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} className={claseInput(errores.fecha)} />
+            <input id="f-fecha" type="date" min={hoy} value={fecha} onChange={(e) => setFecha(e.target.value)} className={claseInput(errores.fecha)} />
           </Campo>
           <Campo etiqueta="Monto total" id="f-monto" error={errores.monto}>
             <div className="relative">
@@ -123,7 +128,7 @@ export default function ReciboFormPage() {
         </Campo>
 
         <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-          <Boton onClick={() => navegar(editando ? `/recibos/${id}` : '/')}>Cancelar</Boton>
+          <Boton onClick={() => navegar(editando ? `/recibos/${id}` : '/', { replace: true, state: { origen } })}>Cancelar</Boton>
           <Boton variante="primario" type="submit" className="sm:min-w-56">
             {editando ? 'Guardar cambios' : 'Guardar recibo'}
           </Boton>

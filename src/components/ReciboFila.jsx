@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { Zap, Truck, Landmark, FileText, ChevronRight } from 'lucide-react'
 import { Insignia } from './ui'
 import { estadoVisible } from '../utils/estado'
@@ -11,12 +11,14 @@ export const iconoDeTipo = (tipo) => ICONOS[tipo] ?? FileText
 /** Tarjeta de un recibo: empresa, código, fecha límite, monto y estado. Al tocarla abre el detalle. */
 /** acento: color de la franja izquierda (clase de borde), usada en Avisos. */
 export default function ReciboFila({ recibo, hoy, compacta, acento }) {
+  const { pathname } = useLocation()
   const estado = estadoVisible(recibo, hoy)
   const Icono = iconoDeTipo(recibo.tipo)
   const colorIcono = estado === 'Vencido' ? 'bg-venc-bg text-venc-tx' : estado === 'Pagado' ? 'bg-pag-bg text-pag-tx' : 'bg-brand/10 text-brand'
   return (
     <Link
       to={`/recibos/${recibo.id}`}
+      state={{ origen: pathname }}
       className={`flex items-center gap-3 rounded-2xl border bg-sup p-3 transition-shadow hover:bg-sup2 sm:p-4 ${estado === 'Vencido' ? 'border-venc-bd' : 'border-borde'} ${acento ? `border-l-4 ${acento}` : ''}`}
     >
       <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl ${colorIcono}`}>
