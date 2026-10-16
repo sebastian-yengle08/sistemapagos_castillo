@@ -1,0 +1,54 @@
+@import "tailwindcss";
+
+/* Paleta y tipografía de Pagos Castillo (sistema de diseño "Clarity") */
+@theme {
+  --font-sans: "Plus Jakarta Sans", system-ui, sans-serif;
+  --color-brand: #1f4e8c;
+  --color-brand-dark: #163b6b;
+  --color-brand-darker: #0f2a4d;
+  --color-fondo: #f6f8fb;
+  --color-borde: #e2e8f0;
+  --color-tinta: #1e293b;
+  --color-suave: #64748b;
+  --color-pend-bg: #fef3c7;
+  --color-pend-tx: #b45309;
+  --color-pend-bd: #fde68a;
+  --color-pag-bg: #d1fae5;
+  --color-pag-tx: #047857;
+  --color-pag-bd: #a7f3d0;
+  --color-venc-bg: #fee2e2;
+  --color-venc-tx: #b91c1c;
+  --color-venc-bd: #fecaca;
+}
+
+html, body, #root { min-height: 100%; }
+body {
+  background: var(--color-fondo);
+  color: var(--color-tinta);
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Foco visible para accesibilidad */
+:focus-visible {
+  outline: 2px solid rgba(31, 78, 140, 0.6);
+  outline-offset: 2px;
+}
+
+button { cursor: pointer; }
+button:disabled { cursor: not-allowed; opacity: .55; }
+
+@keyframes sacudir {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-8px); }
+  40%, 80% { transform: translateX(8px); }
+}
+.sacudir { animation: sacudir .4s; }
+
+@keyframes subir {
+  from { transform: translateY(40px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+.subir { animation: subir .2s ease-out; }
