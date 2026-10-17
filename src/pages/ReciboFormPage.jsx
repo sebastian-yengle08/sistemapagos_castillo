@@ -17,6 +17,8 @@ export default function ReciboFormPage() {
   const origen = state?.origen // pantalla de la que se vino (se conserva al volver al detalle)
   const hoy = hoyISO() // fecha de hoy en Lima
   const [original] = useState(() => (id ? obtenerRecibo(id) : null))
+  // Los préstamos se registran en su propia sección (menú Préstamos), no como recibo suelto
+  const tiposDisponibles = TIPOS.filter((t) => t !== 'Préstamo' || original?.tipo === 'Préstamo')
 
   const [tipo, setTipo] = useState(original?.tipo ?? '')
   const [empresa, setEmpresa] = useState(original?.empresa ?? '')
@@ -90,7 +92,7 @@ export default function ReciboFormPage() {
         <fieldset>
           <legend className="mb-1.5 text-base font-semibold">Tipo de recibo</legend>
           <div role="radiogroup" aria-label="Tipo de recibo" className="flex flex-wrap gap-2">
-            {TIPOS.map((t) => (
+            {tiposDisponibles.map((t) => (
               <Chip key={t} activo={tipo === t} onClick={() => setTipo(t)}>
                 {t}
               </Chip>
