@@ -10,7 +10,7 @@
 // historial desde adentro (función `anotar`), para que no se pueda olvidar.
 // ─────────────────────────────────────────────────────────────────────────────
 import { crearDatosEjemplo } from './seed'
-import { hayNube, leerNube, sincronizarNube, suscribirCambios } from './persistencia'
+import { hayNube, leerNube, sincronizarNube, suscribirCambios, borrarVoucher } from './persistencia'
 import { sumarMeses, partes } from '../utils/fechas'
 import { PERFILES } from '../config/constantes'
 
@@ -242,7 +242,7 @@ export function registrarPago(id, datos) {
   const pagado = {
     ...actual,
     estado: 'Pagado',
-    pago: { monto: datos.monto, fecha: datos.fecha, medio: datos.medio, comprobante: (datos.comprobante ?? '').trim() },
+    pago: { monto: datos.monto, fecha: datos.fecha, medio: datos.medio, comprobante: (datos.comprobante ?? '').trim(), foto: datos.foto ?? null, fotoPath: datos.fotoPath ?? null },
   }
   publicar({
     ...estado,
@@ -258,13 +258,15 @@ export function corregirPago(id, datos) {
   if (!actual || actual.estado !== 'Pagado') return null
   const corregido = {
     ...actual,
-    pago: { monto: datos.monto, fecha: datos.fecha, medio: datos.medio, comprobante: (datos.comprobante ?? '').trim() },
+    pago: { monto: datos.monto, fecha: datos.fecha, medio: datos.medio, comprobante: (datos.comprobante ?? '').trim(), foto: datos.foto ?? null, fotoPath: datos.fotoPath ?? null },
   }
   publicar({
     ...estado,
     recibos: estado.recibos.map((r) => (r.id === id ? corregido : r)),
     historial: anotar(estado.historial, 'corregir-pago', `Corrigió el pago del recibo de ${actual.empresa}`),
   })
+  // Si se cambió la foto, la anterior se borra del almacenamiento
+  if (actual.pago?.fotoPath && actual.pago.fotoPath !== corregido.pago.fotoPath) borrarVoucher(actual.pago.fotoPath)
   return corregido
 }
 
@@ -278,6 +280,7 @@ export function anularPago(id) {
     recibos: estado.recibos.map((r) => (r.id === id ? anulado : r)),
     historial: anotar(estado.historial, 'anular-pago', `Anuló el pago del recibo de ${actual.empresa}`),
   })
+  borrarVoucher(actual.pago?.fotoPath) // al anular el pago también se borra su foto
   return anulado
 }
 

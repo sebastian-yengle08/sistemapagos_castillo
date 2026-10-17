@@ -2,7 +2,7 @@
 
 Sistema para **ordenar, registrar y visualizar** los pagos de la empresa Castillo. El gerente entrega los recibos en físico, el asistente los registra y, después de pagar por su cuenta, registra el pago. **El sistema no paga nada.**
 
-React + Vite + Tailwind CSS (JavaScript). Sin backend: los datos viven en `localStorage` detrás de una capa separada (`src/data/store.js`), lista para cambiarla por Supabase.
+React + Vite + Tailwind CSS (JavaScript). Los datos viven en Supabase (con respaldo en `localStorage` si no hay conexión configurada), detrás de una capa separada (`src/data/store.js`). Las fotos de los vouchers se guardan en Supabase Storage (bucket `vouchers`).
 
 ## Instalar y ejecutar
 
@@ -50,13 +50,17 @@ src/
 - `vercel.json` ya incluye la reescritura para que las rutas del navegador funcionen. Configurar el proyecto de Vercel con **Root Directory = `pagos-castillo`**.
 - Importante: al conectar Supabase hay que reemplazar el PIN en el navegador por autenticación real (un hash visible en el código del cliente no es seguridad de verdad).
 
+## Voucher (foto del comprobante)
+
+Al registrar o corregir un pago, el asistente **debe subir la foto del voucher** ("Tomar foto" en celular o "Elegir imagen"). La foto se reduce a JPEG (máx. 1600 px) antes de subirla, se guarda en Supabase Storage y se ve en el detalle del recibo pagado, tanto para el asistente como para el gerente. Al anular el pago, la foto se borra. Para crear el bucket hay que ejecutar `supabase/schema.sql` en Supabase.
+
 ## Guion de demo (3 minutos)
 
 **Asistente (PIN 1234)**
 1. *Calendario*: mostrar contadores del mes (solo cantidades) y "Próximos pagos". Tocar un día → panel con "Ver detalle".
 2. *Avisos* (campana con contador): Vence hoy, Vence en 3 días, Vencidos.
 3. *Nuevo recibo*: dejar vacío y guardar (mensajes claros); luego llenar SEDALIB + código ya existente → aparece **"Este recibo parece repetido"** → Cancelar.
-4. Abrir el recibo de SEDALIB que vence hoy → **Registrar pago** (toque 1) → ya viene con monto, fecha y *Efectivo — Usado la última vez* → **Confirmar pago** (toque 2) → "Pago registrado" ✔. Ver "Pago realizado" en el detalle, el recibo en verde y el contador de Pagados +1.
+4. Abrir el recibo de SEDALIB que vence hoy → **Registrar pago** (toque 1) → ya viene con monto, fecha y *Efectivo — Usado la última vez* → **sube la foto del voucher** → **Confirmar pago** → "Pago registrado" ✔. Ver "Pago realizado" en el detalle, el recibo en verde y el contador de Pagados +1.
 5. Editar y eliminar un recibo (con confirmación). Mostrar que una cuota de préstamo solo se puede pagar.
 6. **Bloquear**.
 
@@ -68,4 +72,4 @@ src/
 
 ## Pendiente para la siguiente etapa
 
-Pago automático desde el sistema · notificaciones push · historial mensual · totales de gasto por categoría · impuestos con recurrencia · restricciones al gerente · usuarios individuales con login · backend real (Supabase) · fotos de comprobantes · registro de tarjetas · tests automatizados.
+Pago automático desde el sistema · notificaciones push · historial mensual · totales de gasto por categoría · impuestos con recurrencia · restricciones al gerente · usuarios individuales con login · backend real (Supabase) · registro de tarjetas · tests automatizados · bucket de vouchers privado con acceso por usuario.

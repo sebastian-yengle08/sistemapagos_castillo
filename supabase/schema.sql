@@ -76,3 +76,17 @@ begin
     end;
   end loop;
 end $$;
+
+-- Fotos de los vouchers (comprobantes de pago).
+-- Bucket público (las fotos se ven con un enlace con nombre aleatorio); máx. 5 MB por foto.
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('vouchers', 'vouchers', true, 5242880, array['image/jpeg', 'image/png', 'image/webp'])
+on conflict (id) do update
+  set public = true, file_size_limit = excluded.file_size_limit, allowed_mime_types = excluded.allowed_mime_types;
+
+drop policy if exists "prototipo vouchers ver"   on storage.objects;
+drop policy if exists "prototipo vouchers subir" on storage.objects;
+drop policy if exists "prototipo vouchers borrar" on storage.objects;
+create policy "prototipo vouchers ver"    on storage.objects for select to anon using (bucket_id = 'vouchers');
+create policy "prototipo vouchers subir"  on storage.objects for insert to anon with check (bucket_id = 'vouchers');
+create policy "prototipo vouchers borrar" on storage.objects for delete to anon using (bucket_id = 'vouchers');

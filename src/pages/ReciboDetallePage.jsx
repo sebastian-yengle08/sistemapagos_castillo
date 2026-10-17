@@ -3,7 +3,7 @@
 // Cuotas de préstamo: no se editan ni eliminan. Gerente: solo consulta.
 import { useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, CheckCircle2, Pencil, Trash2, Wallet, FileX, Banknote, Undo2 } from 'lucide-react'
+import { ArrowLeft, CheckCircle2, Pencil, Trash2, Wallet, FileX, Banknote, Undo2, ZoomIn } from 'lucide-react'
 import { useDatos } from '../data/useDatos'
 import { useAuth } from '../context/AuthContext'
 import { anularPago, eliminarRecibo } from '../data/store'
@@ -33,6 +33,7 @@ export default function ReciboDetallePage() {
   const [corrigiendo, setCorrigiendo] = useState(false)
   const [eliminando, setEliminando] = useState(false)
   const [anulando, setAnulando] = useState(false)
+  const [verFoto, setVerFoto] = useState(false) // foto del voucher en grande
 
   // Pantalla de la que se vino (calendario, avisos, préstamo, historial); por defecto el calendario
   const origen = state?.origen ?? '/'
@@ -111,6 +112,20 @@ export default function ReciboDetallePage() {
             <Dato etiqueta="Fecha de pago">{formatoFecha(r.pago.fecha)}</Dato>
             {r.pago.comprobante && <Dato etiqueta="Comprobante">{r.pago.comprobante}</Dato>}
           </dl>
+          {/* Foto del voucher: se ve igual para asistente y gerente */}
+          <div className="mt-3">
+            <p className="mb-1.5 text-sm font-semibold text-suave">Foto del voucher</p>
+            {r.pago.foto ? (
+              <button type="button" onClick={() => setVerFoto(true)} className="group relative block overflow-hidden rounded-2xl border border-borde" aria-label="Ver la foto del voucher en grande">
+                <img src={r.pago.foto} alt="Voucher del pago" loading="lazy" className="h-40 w-full max-w-xs object-cover transition group-hover:opacity-90" />
+                <span className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-1 bg-slate-900/60 py-1 text-sm font-semibold text-white">
+                  <ZoomIn size={16} aria-hidden="true" /> Ver en grande
+                </span>
+              </button>
+            ) : (
+              <p className="rounded-xl bg-slate-900/[.04] p-3 text-sm text-suave">Este pago se registró sin foto del voucher.</p>
+            )}
+          </div>
         </Tarjeta>
       )}
 
@@ -172,6 +187,16 @@ export default function ReciboDetallePage() {
             recargarDetalle()
           }}
         />
+      )}
+
+      {r.pago?.foto && (
+        <Ventana abierta={verFoto} onCerrar={() => setVerFoto(false)} titulo="Foto del voucher" ancho="max-w-2xl">
+          <h2 className="mb-3 pr-10 text-xl font-bold">Voucher de {r.empresa}</h2>
+          <img src={r.pago.foto} alt="Voucher del pago" className="max-h-[70vh] w-full rounded-2xl object-contain" />
+          <a href={r.pago.foto} target="_blank" rel="noreferrer" className="mt-3 inline-flex min-h-11 items-center font-semibold text-brand underline">
+            Abrir imagen en otra pestaña
+          </a>
+        </Ventana>
       )}
 
       <Ventana abierta={eliminando} onCerrar={() => setEliminando(false)} titulo="Eliminar recibo">

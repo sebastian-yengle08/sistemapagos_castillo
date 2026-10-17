@@ -1,6 +1,7 @@
 // Guarda y lee los datos en Supabase. Solo lo usa store.js.
 // Si no hay variables VITE_SUPABASE_*, la app sigue funcionando solo con localStorage.
 import { createClient } from '@supabase/supabase-js'
+import { blobADataUrl } from '../utils/imagen'
 
 const URL = import.meta.env.VITE_SUPABASE_URL
 const CLAVE = import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -104,4 +105,26 @@ export function suscribirCambios(alCambiar) {
   for (const t of TABLAS) canal = canal.on('postgres_changes', { event: '*', schema: 'public', table: t }, alCambiar)
   canal.subscribe()
   canalTiempoReal = canal
+}
+
+// ── Fotos de vouchers ───────────────────────────────────────────────────────
+const BUCKET = 'vouchers'
+
+/** Sube la foto del voucher. Devuelve { url, path }. Sin Supabase se guarda dentro del navegador. */
+export async function subirVoucher(blob) {
+  if (!nube) return { url: await blobADataUrl(blob), path: null }
+  const path = `${crypto.randomUUID()}.jpg`
+  const { error } = await nube.storage.from(BUCKET).upload(path, blob, { contentType: 'image/jpeg', cacheControl: '31536000' })
+  if (error) throw new Error(error.message)
+  return { url: nube.storage.from(BUCKET).getPublicUrl(path).data.publicUrl, path }
+}
+
+/** Borra una foto (si falla no pasa nada: queda como archivo sin usar). */
+export async function borrarVoucher(path) {
+  if (!nube || !path) return
+  try {
+    await nube.storage.from(BUCKET).remove([path])
+  } catch {
+    /* ignorar */
+  }
 }
