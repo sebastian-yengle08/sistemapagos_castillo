@@ -88,8 +88,10 @@ let version = 0 // sube con cada cambio local: así una lectura vieja nunca pisa
 /** Vuelve a leer Supabase (cambios hechos desde otros dispositivos). Espera a los envíos pendientes. */
 export function refrescar() {
   if (!usaNube) return
+  // La versión local se anota AL PEDIR la lectura (no cuando le toca el turno en la cola): si entre tanto
+  // se hizo un cambio local, esta lectura queda vieja y se descarta, aunque su turno llegue después.
+  const v = version
   cola = cola.then(async () => {
-    const v = version
     try {
       const remoto = await leerNube()
       if (v !== version) return // hubo un cambio local mientras se leía: la próxima lectura lo recoge
