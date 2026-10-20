@@ -12,7 +12,7 @@
 import { crearDatosEjemplo } from './seed'
 import { hayNube, leerNube, sincronizarNube, suscribirCambios, borrarVoucher } from './persistencia'
 import { hoyISO, FECHA_MINIMA, fechaEnRango, sumarMeses, partes } from '../utils/fechas'
-import { PERFILES, MAX_CUOTAS, LIMITE_CUOTA, LIMITE_PRESTAMO } from '../config/constantes'
+import { PERFILES, MAX_CUOTAS, LIMITE_CUOTA, LIMITE_PRESTAMO, LIMITE_MONTO } from '../config/constantes'
 import { codigoValido } from '../utils/validacion'
 
 const CLAVE = 'pagosCastillo.datos.v1'
@@ -174,6 +174,33 @@ function anotar(historial, accion, texto, perfil = actor) {
 const nuevoId = (prefijo) => `${prefijo}_${crypto.randomUUID().slice(0, 12)}`
 const normalizar = (t) => String(t ?? '').toLowerCase().replace(/\s+/g, '')
 
+// ── Motivo de los rechazos ──────────────────────────────────────────────────
+// Las funciones que validan devuelven null cuando no guardan. Antes la pantalla no sabía por qué
+// (y mostraba siempre un error de fecha). Ahora cada rechazo deja { mensaje, campo }: el texto
+// para el usuario y el campo del formulario al que corresponde ('general' si no es de un campo).
+let ultimoRechazo = null
+function rechazar(mensaje, campo = 'general') {
+  ultimoRechazo = { mensaje, campo }
+  return null
+}
+/** Motivo del último rechazo. Llamar justo después de que una función devuelva null. */
+export const motivoRechazo = () => ultimoRechazo ?? { mensaje: 'No se pudo guardar. Actualiza la pantalla e inténtalo de nuevo.', campo: 'general' }
+
+const MSG_FECHA = 'La fecha límite debe estar entre el 1 de enero de 2026 y el 31 de diciembre de 2050.'
+const MSG_MONTO = 'El monto debe ser mayor a cero y tener como máximo 10 dígitos enteros y 2 decimales.'
+const montoValido = (m) => Number.isFinite(m) && m > 0 && m <= LIMITE_MONTO
+
+/** Valida los datos de un préstamo (nuevo o editado). Devuelve true, o false dejando el motivo. */
+function prestamoValido(datos) {
+  if (!fechaEnRango(datos.primeraFecha)) return !rechazar('La fecha de la primera cuota debe estar entre el 1 de enero de 2026 y el 31 de diciembre de 2050.', 'primera')
+  if (!Number.isInteger(datos.numCuotas) || datos.numCuotas < 1 || datos.numCuotas > MAX_CUOTAS) return !rechazar(`El número de cuotas debe ser de 1 a ${MAX_CUOTAS}.`, 'num')
+  if (!(datos.montoCuota > 0)) return !rechazar('Escribe el monto de cada cuota.', 'cuota')
+  if (datos.montoCuota > LIMITE_CUOTA) return !rechazar('El monto de cada cuota no puede superar los 10 dígitos enteros.', 'cuota')
+  if (!(datos.montoTotal > 0)) return !rechazar('El monto total del préstamo debe ser mayor a cero.', 'cuota')
+  if (datos.montoTotal > LIMITE_PRESTAMO) return !rechazar('El monto total del préstamo (suma de las cuotas) no puede superar S/ 9,999,999,999.99. Baja el monto o el número de cuotas.', 'cuota')
+  return true
+}
+
 // ── Consultas ───────────────────────────────────────────────────────────────
 export function obtenerRecibo(id) {
   return estado.recibos.find((r) => r.id === id) ?? null
@@ -201,8 +228,9 @@ export function ultimoMedioDeEmpresa(empresa) {
 
 // ── Recibos ─────────────────────────────────────────────────────────────────
 export function crearRecibo(datos) {
-  if (!fechaEnRango(datos.fechaLimite)) return null
-  if (!codigoValido(datos.tipo, datos.codigo)) return null
+  if (!fechaEnRango(datos.fechaLimite)) return rechazar(MSG_FECHA, 'fecha')
+  if (!codigoValido(datos.tipo, datos.codigo)) return rechazar('El código no tiene el formato correcto para este tipo de recibo.', 'codigo')
+  if (!montoValido(datos.monto)) return rechazar(MSG_MONTO, 'monto')
   const id = nuevoId('r')
   const recibo = {
     id,
@@ -231,10 +259,13 @@ const ETIQUETAS_CAMPO = { tipo: 'el tipo', empresa: 'la empresa', codigo: 'el c�
 export function editarRecibo(id, cambios) {
   const actual = obtenerRecibo(id)
   // Las cuotas de préstamo y los recibos pagados no se editan (un pagado se corrige con corregirPago)
-  if (!actual || actual.prestamoId || actual.estado === 'Pagado') return null
-  if (cambios.fechaLimite !== undefined && !fechaEnRango(cambios.fechaLimite)) return null
+  if (!actual) return rechazar('Este recibo ya no existe. Vuelve al calendario y actualiza la pantalla.')
+  if (actual.prestamoId) return rechazar('Las cuotas de un préstamo no se pueden editar.')
+  if (actual.estado === 'Pagado') return rechazar('Este recibo ya fue pagado (puede haberse pagado desde otro dispositivo), por eso no se puede editar. Vuelve al detalle para ver su estado actual.')
+  if (cambios.fechaLimite !== undefined && !fechaEnRango(cambios.fechaLimite)) return rechazar(MSG_FECHA, 'fecha')
+  if (cambios.monto !== undefined && !montoValido(cambios.monto)) return rechazar(MSG_MONTO, 'monto')
   const nuevo = { ...actual, ...cambios, empresa: (cambios.empresa ?? actual.empresa).trim(), codigo: (cambios.codigo ?? actual.codigo).trim() }
-  if (!codigoValido(nuevo.tipo, nuevo.codigo)) return null
+  if (!codigoValido(nuevo.tipo, nuevo.codigo)) return rechazar('El código no tiene el formato correcto para este tipo de recibo.', 'codigo')
   const tocados = Object.keys(ETIQUETAS_CAMPO).filter((k) => (actual[k] ?? null) !== (nuevo[k] ?? null))
   const texto = tocados.length === 1
     ? `Editó ${ETIQUETAS_CAMPO[tocados[0]]} del recibo de ${nuevo.empresa}`
@@ -271,12 +302,13 @@ function fechaPagoValida(fecha) {
  */
 export function registrarPago(id, datos) {
   const actual = obtenerRecibo(id)
-  if (!actual || actual.estado === 'Pagado') return null
-  if (!fechaPagoValida(datos.fecha)) return null
+  if (!actual) return rechazar('Este recibo ya no existe. Vuelve al calendario y actualiza la pantalla.')
+  if (actual.estado === 'Pagado') return rechazar('Este recibo ya figura como pagado (puede haberse pagado desde otro dispositivo). Cierra esta ventana para ver su estado actual.')
+  if (!fechaPagoValida(datos.fecha)) return rechazar('La fecha de pago debe estar entre el 1 de enero de 2026 y hoy.', 'fecha')
   const interes = actual.prestamoId ? Number(datos.interes ?? 0) : 0
-  if (!Number.isFinite(interes) || interes < 0) return null
+  if (!Number.isFinite(interes) || interes < 0) return rechazar('La mora o interés debe ser un monto válido, mayor o igual a cero.', 'interes')
   const monto = actual.prestamoId ? Math.round((actual.monto + interes) * 100) / 100 : actual.monto
-  if (!(monto > 0) || monto < actual.monto) return null
+  if (!(monto > 0) || monto < actual.monto) return rechazar('El monto pagado no puede ser menor al monto del recibo.', 'monto')
   const pagado = {
     ...actual,
     estado: 'Pagado',
@@ -300,8 +332,9 @@ export function registrarPago(id, datos) {
 /** Corrige la fecha, el medio y la foto de un pago ya registrado. El monto no se modifica. */
 export function corregirPago(id, datos) {
   const actual = obtenerRecibo(id)
-  if (!actual || actual.estado !== 'Pagado') return null
-  if (!fechaPagoValida(datos.fecha)) return null
+  if (!actual) return rechazar('Este recibo ya no existe. Vuelve al calendario y actualiza la pantalla.')
+  if (actual.estado !== 'Pagado') return rechazar('Este recibo ya no figura como pagado. Cierra esta ventana para ver su estado actual.')
+  if (!fechaPagoValida(datos.fecha)) return rechazar('La fecha de pago debe estar entre el 1 de enero de 2026 y hoy.', 'fecha')
   const corregido = {
     ...actual,
     pago: {
@@ -350,11 +383,8 @@ export function calcularCuotas({ numCuotas, montoCuota, primeraFecha }) {
 
 /** datos: { entidad, montoTotal, numCuotas, montoCuota, primeraFecha } */
 export function crearPrestamo(datos) {
-  if (actor !== 'asistente') return null // los préstamos los gestiona el asistente
-  if (!fechaEnRango(datos.primeraFecha)) return null
-  if (!Number.isInteger(datos.numCuotas) || datos.numCuotas < 1 || datos.numCuotas > MAX_CUOTAS) return null
-  if (!(datos.montoCuota > 0) || datos.montoCuota > LIMITE_CUOTA) return null
-  if (!(datos.montoTotal > 0) || datos.montoTotal > LIMITE_PRESTAMO) return null
+  if (actor !== 'asistente') return rechazar('Solo el asistente puede registrar préstamos.') // los préstamos los gestiona el asistente
+  if (!prestamoValido(datos)) return null
   const correlativo = estado.prestamos.length + 1
   const codigoBase = `PRE-${String(correlativo).padStart(4, '0')}`
   const prestamo = {
@@ -417,16 +447,14 @@ export function planEdicionPrestamo(id, { numCuotas, montoCuota, primeraFecha })
 /** Edita un préstamo: banco, número de cuotas, monto de cuota y fecha de la primera cuota. */
 export function editarPrestamo(id, datos) {
   const actual = obtenerPrestamo(id)
-  if (!actual || actor !== 'asistente') return null
-  if (datos.primeraFecha !== undefined && !fechaEnRango(datos.primeraFecha)) return null
-  if (!Number.isInteger(datos.numCuotas) || datos.numCuotas < 1 || datos.numCuotas > MAX_CUOTAS) return null
-  if (!(datos.montoCuota > 0) || datos.montoCuota > LIMITE_CUOTA) return null
-  if (!(datos.montoTotal > 0) || datos.montoTotal > LIMITE_PRESTAMO) return null
+  if (!actual) return rechazar('Este préstamo ya no existe. Vuelve a Préstamos y actualiza la pantalla.')
+  if (actor !== 'asistente') return rechazar('Solo el asistente puede editar préstamos.')
+  if (!prestamoValido(datos)) return null
   // Si ya hay cuotas pagadas, el monto de cada cuota no puede cambiar.
   const hayPagadas = estado.recibos.some((r) => r.prestamoId === id && r.estado === 'Pagado')
-  if (hayPagadas && Math.abs(Number(datos.montoCuota) - Number(actual.montoCuota)) > 0.005) return null
+  if (hayPagadas && Math.abs(Number(datos.montoCuota) - Number(actual.montoCuota)) > 0.005) return rechazar('Ya hay cuotas pagadas (puede haberse pagado una desde otro dispositivo): el monto de cada cuota no se puede cambiar.', 'cuota')
   const { cuotas, minimoCuotas } = planEdicionPrestamo(id, datos)
-  if (datos.numCuotas < minimoCuotas) return null
+  if (datos.numCuotas < minimoCuotas) return rechazar(`Ya hay cuotas pagadas hasta la ${minimoCuotas}: no puede haber menos cuotas.`, 'num')
   const entidad = datos.entidad.trim()
   const codigoBase = `PRE-${String(actual.correlativo).padStart(4, '0')}`
   const porNumero = new Map(estado.recibos.filter((r) => r.prestamoId === id).map((r) => [r.cuota, r]))

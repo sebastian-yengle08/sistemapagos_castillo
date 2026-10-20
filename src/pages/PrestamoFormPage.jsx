@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, Landmark } from 'lucide-react'
 import { Boton, Campo, Insignia, Tarjeta, Vacio, claseInput } from '../components/ui'
-import { calcularCuotas, crearPrestamo, editarPrestamo, obtenerPrestamo, planEdicionPrestamo } from '../data/store'
+import { calcularCuotas, crearPrestamo, editarPrestamo, motivoRechazo, obtenerPrestamo, planEdicionPrestamo } from '../data/store'
 import { useDatos } from '../data/useDatos'
 import { LIMITE_PRESTAMO, LIMITE_CUOTA, MAX_CUOTAS } from '../config/constantes'
 import { formatoFecha, hoyISO, FECHA_MINIMA, FECHA_MAXIMA, fechaEnRango } from '../utils/fechas'
@@ -69,12 +69,16 @@ export default function PrestamoFormPage() {
     if (!primera) er.primera = 'Elige la fecha de la primera cuota.'
     else if (primera < fechaMinima) er.primera = 'La fecha de la primera cuota debe ser desde el 1 de enero de 2026.'
     else if (primera > fechaMaxima) er.primera = 'La fecha de la primera cuota no puede ser posterior al 31 de diciembre de 2050.'
-    if (montoTotal > LIMITE_PRESTAMO) er.cuota = `El monto total del préstamo no puede superar S/ ${formatoSoles(LIMITE_PRESTAMO)}.`
+    if (montoTotal > LIMITE_PRESTAMO) er.cuota = `El monto total del préstamo (suma de las cuotas) no puede superar ${formatoSoles(LIMITE_PRESTAMO)}. Baja el monto o el número de cuotas.`
     setErrores(er)
     if (Object.keys(er).length) return
     const datos = { entidad, montoTotal, numCuotas: nCuotas, montoCuota: montoCuotaEfectivo, primeraFecha: primera }
     const p = editando ? editarPrestamo(id, datos) : crearPrestamo(datos)
-    if (!p) return setErrores((x) => ({ ...x, primera: 'La fecha de la primera cuota debe estar entre el 1 de enero de 2026 y el 31 de diciembre de 2050.' }))
+    if (!p) {
+      // El store rechazó el guardado: se muestra el motivo real, junto al campo que corresponde
+      const r = motivoRechazo()
+      return setErrores({ [r.campo]: r.mensaje })
+    }
     navegar(`/prestamos/${p.id}`, { replace: true, state: { aviso: editando ? 'Cambios del préstamo guardados' : 'Préstamo guardado y cuotas creadas' } })
   }
 
@@ -178,6 +182,12 @@ export default function PrestamoFormPage() {
             </Tarjeta>
           )}
         </section>
+
+        {errores.general && (
+          <p role="alert" className="rounded-xl border border-venc-bd bg-venc-bg px-4 py-3 font-semibold text-venc-tx">
+            {errores.general}
+          </p>
+        )}
 
         <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
           <Boton onClick={() => navegar(volverA, { replace: true })}>Cancelar</Boton>

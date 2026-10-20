@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Camera, CheckCircle2, ImagePlus, Loader2 } from 'lucide-react'
 import { Boton, Campo, Chip, Ventana, claseInput } from './ui'
 import { MEDIOS } from '../config/constantes'
-import { corregirPago, registrarPago, ultimoMedioDeEmpresa } from '../data/store'
+import { corregirPago, motivoRechazo, registrarPago, ultimoMedioDeEmpresa } from '../data/store'
 import { subirVoucher } from '../data/persistencia'
 import { comprimirImagen } from '../utils/imagen'
 import { formatoFecha, hoyISO, FECHA_MINIMA, fechaEnRango } from '../utils/fechas'
@@ -73,7 +73,7 @@ export default function RegistrarPagoModal({ recibo, modo = 'registrar', onCerra
   async function confirmar() {
     const e = {}
     if (!(totalPagado > 0)) e.monto = 'El monto pagado debe ser mayor a cero.'
-    else if (!corrigiendo && totalPagado < montoBase) e.monto = `El monto pagado no puede ser menor al monto ${esCuota ? 'de la cuota' : 'del recibo'} (S/ ${formatoSoles(montoBase)}).`
+    else if (!corrigiendo && totalPagado < montoBase) e.monto = `El monto pagado no puede ser menor al monto ${esCuota ? 'de la cuota' : 'del recibo'} (${formatoSoles(montoBase)}).`
     if (agregarInteres && interesTexto !== '' && !Number.isFinite(interesNum)) e.interes = 'Escribe un monto válido para la mora o interés.'
     else if (agregarInteres && interesNum < 0) e.interes = 'La mora o interés no puede ser negativo.'
     if (!fecha) e.fecha = 'Elige la fecha de pago.'
@@ -96,7 +96,9 @@ export default function RegistrarPagoModal({ recibo, modo = 'registrar', onCerra
     const datos = { monto: totalPagado, interes: interesValido ? interesNum : 0, fecha, medio, foto: foto.url, fotoPath: foto.path }
     const resultado = corrigiendo ? corregirPago(recibo.id, datos) : registrarPago(recibo.id, datos)
     if (!resultado) {
-      setErrores({ monto: 'No se pudo registrar el pago.' })
+      // El store rechazó el pago: se muestra el motivo real, junto al campo que corresponde
+      const r = motivoRechazo()
+      setErrores({ [r.campo]: r.mensaje })
       setGuardando(false)
       return
     }
@@ -264,6 +266,12 @@ export default function RegistrarPagoModal({ recibo, modo = 'registrar', onCerra
             </p>
           )}
         </div>
+
+        {errores.general && (
+          <p role="alert" className="rounded-xl border border-venc-bd bg-venc-bg px-4 py-3 font-semibold text-venc-tx">
+            {errores.general}
+          </p>
+        )}
 
         <Boton variante="primario" grande onClick={confirmar} disabled={guardando || procesando}>
           {guardando ? (

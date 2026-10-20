@@ -3,11 +3,11 @@ import { useState } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, AlertTriangle } from 'lucide-react'
 import { Boton, Campo, Chip, Tarjeta, Ventana, claseInput } from '../components/ui'
-import { TIPOS } from '../config/constantes'
-import { buscarDuplicado, crearRecibo, editarRecibo, obtenerRecibo } from '../data/store'
+import { TIPOS, LIMITE_MONTO } from '../config/constantes'
+import { buscarDuplicado, crearRecibo, editarRecibo, motivoRechazo, obtenerRecibo } from '../data/store'
 import { formatoFecha, hoyISO, FECHA_MINIMA, FECHA_MAXIMA, fechaEnRango } from '../utils/fechas'
 import { formatoSoles, leerMonto } from '../utils/dinero'
-import { soloLetras, soloLetrasNumeros, soloMonto, soloCodigo, soloDigitos, soloAlfanumerico, codigoValido } from '../utils/validacion'
+import { soloLetras, soloLetrasNumeros, soloMontoCuota, soloCodigo, soloDigitos, soloAlfanumerico, codigoValido } from '../utils/validacion'
 
 // Cada tipo de recibo tiene su propio formato de código.
 function limpiarCodigoDe(tipo, texto) {
@@ -106,8 +106,15 @@ export default function ReciboFormPage() {
     const m = leerMonto(monto)
     if (monto.trim() === '') e.monto = 'Escribe el monto total.'
     else if (!(m > 0)) e.monto = 'Escribe un monto válido, mayor a cero.'
+    else if (m > LIMITE_MONTO) e.monto = 'El monto no puede superar S/ 9,999,999,999.99 (10 dígitos enteros).'
     setErrores(e)
     return Object.keys(e).length === 0
+  }
+
+  // Muestra el motivo REAL por el que el store no guardó (junto al campo que corresponde)
+  function mostrarRechazo() {
+    const r = motivoRechazo()
+    setErrores({ [r.campo]: r.mensaje })
   }
 
   function guardar() {
@@ -124,12 +131,12 @@ export default function ReciboFormPage() {
     if (previo) return setDuplicado(previo)
     if (editando) {
       const editado = editarRecibo(id, datos)
-      if (!editado) return setErrores({ fecha: 'La fecha límite debe estar entre el 1 de enero de 2026 y el 31 de diciembre de 2050.' })
+      if (!editado) return mostrarRechazo()
       navegar(`/recibos/${id}`, { replace: true, state: { origen, aviso: 'Cambios guardados' } })
       return
     }
     const nuevo = crearRecibo(datos)
-    if (!nuevo) return setErrores({ fecha: 'La fecha límite debe estar entre el 1 de enero de 2026 y el 31 de diciembre de 2050.' })
+    if (!nuevo) return mostrarRechazo()
     navegar('/', { replace: true, state: { aviso: `Recibo guardado: ${nuevo.empresa}` } })
   }
 
@@ -185,10 +192,16 @@ export default function ReciboFormPage() {
           <Campo etiqueta="Monto total" id="f-monto" error={errores.monto}>
             <div className="relative">
               <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 font-semibold text-suave">S/</span>
-              <input id="f-monto" inputMode="decimal" value={monto} onChange={(e) => setMonto(soloMonto(e.target.value))} placeholder="0.00" className={`${claseInput(errores.monto)} pl-11`} />
+              <input id="f-monto" inputMode="decimal" value={monto} onChange={(e) => setMonto(soloMontoCuota(e.target.value))} placeholder="0.00" className={`${claseInput(errores.monto)} pl-11`} />
             </div>
           </Campo>
         </div>
+
+        {errores.general && (
+          <p role="alert" className="rounded-xl border border-venc-bd bg-venc-bg px-4 py-3 font-semibold text-venc-tx">
+            {errores.general}
+          </p>
+        )}
 
         <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
           <Boton onClick={() => navegar(editando ? `/recibos/${id}` : '/', { replace: true, state: { origen } })}>Cancelar</Boton>
