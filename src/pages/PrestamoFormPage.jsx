@@ -6,7 +6,7 @@ import { ArrowLeft, Landmark } from 'lucide-react'
 import { Boton, Campo, Insignia, Tarjeta, Vacio, claseInput } from '../components/ui'
 import { calcularCuotas, crearPrestamo, editarPrestamo, obtenerPrestamo, planEdicionPrestamo } from '../data/store'
 import { LIMITE_PRESTAMO, LIMITE_CUOTA, MAX_CUOTAS } from '../config/constantes'
-import { formatoFecha, hoyISO, FECHA_MINIMA, FECHA_MAXIMA } from '../utils/fechas'
+import { formatoFecha, hoyISO, FECHA_MINIMA, FECHA_MAXIMA, fechaEnRango } from '../utils/fechas'
 import { formatoSoles, leerMonto } from '../utils/dinero'
 import { soloLetras, soloMontoCuota } from '../utils/validacion'
 
@@ -22,7 +22,7 @@ export default function PrestamoFormPage() {
   const [entidad, setEntidad] = useState(original?.entidad ?? '')
   const [num, setNum] = useState(original ? String(original.numCuotas) : '')
   const [cuota, setCuota] = useState(original ? original.montoCuota.toFixed(2) : '')
-  const [primera, setPrimera] = useState(original?.primeraFecha ?? hoy)
+  const [primera, setPrimera] = useState(() => (fechaEnRango(original?.primeraFecha) ? original.primeraFecha : hoy))
   const [errores, setErrores] = useState({})
 
   const nCuotas = Number(num)
@@ -98,7 +98,7 @@ export default function PrestamoFormPage() {
           </Campo>
           <Campo etiqueta="Monto de cada cuota" id="p-cuo" error={errores.cuota} ayuda="Máximo 10 dígitos.">
             <div className="relative">
-              <span className="absolute left-4 top-1/2 -translate-y-1/2 font-semibold text-suave">S/</span>
+              <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 font-semibold text-suave">S/</span>
               <input id="p-cuo" inputMode="decimal" value={cuota} onChange={(e) => setCuota(soloMontoCuota(e.target.value))} placeholder="0.00" className={`${claseInput(errores.cuota)} pl-11`} />
             </div>
           </Campo>

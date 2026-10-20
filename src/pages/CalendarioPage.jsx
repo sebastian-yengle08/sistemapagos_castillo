@@ -8,7 +8,7 @@ import { useDatos } from '../data/useDatos'
 import { Boton, Tarjeta, Vacio, Ventana } from '../components/ui'
 import ReciboFila from '../components/ReciboFila'
 import { estadoVisible } from '../utils/estado'
-import { armar, diaSemanaLunes, diasDelMes, fechaLarga, hoyISO, nombreDia, nombreMes, partes, sumarDias } from '../utils/fechas'
+import { armar, diaSemanaLunes, diasDelMes, fechaLarga, hoyISO, nombreDia, nombreMes, partes, sumarDias, FECHA_MINIMA, FECHA_MAXIMA } from '../utils/fechas'
 import { formatoSoles } from '../utils/dinero'
 
 const SEMANA = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
@@ -18,6 +18,12 @@ const ETIQUETA = {
   Vencido: 'bg-venc-bg text-venc-tx border-venc-bd',
 }
 const PUNTO = { Pendiente: 'bg-[#f59e0b]', Pagado: 'bg-[#16a34a]', Vencido: 'bg-[#dc2626]' }
+
+// El calendario solo puede navegar entre enero de 2026 y diciembre de 2050.
+const LIMITE_MIN = partes(FECHA_MINIMA)
+const LIMITE_MAX = partes(FECHA_MAXIMA)
+const TOTAL_MIN = LIMITE_MIN.a * 12 + (LIMITE_MIN.m - 1)
+const TOTAL_MAX = LIMITE_MAX.a * 12 + (LIMITE_MAX.m - 1)
 
 function Contador({ titulo, valor, Icono, clase }) {
   return (
@@ -37,11 +43,21 @@ export default function CalendarioPage() {
   const { state } = useLocation()
   const hoy = hoyISO()
   const h = partes(hoy)
-  const [vista, setVista] = useState({ a: h.a, m: h.m })
+  const [vista, setVista] = useState(() => {
+    const total = h.a * 12 + (h.m - 1)
+    const acotado = Math.min(Math.max(total, TOTAL_MIN), TOTAL_MAX)
+    return { a: Math.floor(acotado / 12), m: (acotado % 12) + 1 }
+  })
   const [dia, setDia] = useState(null) // día tocado (aaaa-mm-dd)
 
-  const mover = (n) => {
-    const total = vista.a * 12 + (vista.m - 1) + n
+  const totalVista = vista.a * 12 + (vista.m - 1)
+  const movimiento = (n) => {
+    const total = Math.min(Math.max(totalVista + n, TOTAL_MIN), TOTAL_MAX)
+    setVista({ a: Math.floor(total / 12), m: (total % 12) + 1 })
+    setDia(null)
+  }
+  const irHoy = () => {
+    const total = Math.min(Math.max(h.a * 12 + (h.m - 1), TOTAL_MIN), TOTAL_MAX)
     setVista({ a: Math.floor(total / 12), m: (total % 12) + 1 })
     setDia(null)
   }
@@ -131,24 +147,17 @@ export default function CalendarioPage() {
         {/* Navegación de mes */}
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center rounded-xl border border-borde bg-sup">
-            <button type="button" onClick={() => mover(-1)} aria-label="Mes anterior" className="grid h-12 w-12 place-items-center rounded-l-xl hover:bg-slate-900/5">
+            <button type="button" onClick={() => movimiento(-1)} disabled={totalVista <= TOTAL_MIN} aria-label="Mes anterior" className="grid h-12 w-12 place-items-center rounded-l-xl hover:bg-slate-900/5 disabled:cursor-not-allowed disabled:opacity-40">
               <ChevronLeft size={22} />
             </button>
             <h1 className="min-w-36 text-center text-xl font-bold text-tinta sm:min-w-44 sm:text-2xl">
               {nombreMes(vista.m)} {vista.a}
             </h1>
-            <button type="button" onClick={() => mover(1)} aria-label="Mes siguiente" className="grid h-12 w-12 place-items-center rounded-r-xl hover:bg-slate-900/5">
+            <button type="button" onClick={() => movimiento(1)} disabled={totalVista >= TOTAL_MAX} aria-label="Mes siguiente" className="grid h-12 w-12 place-items-center rounded-r-xl hover:bg-slate-900/5 disabled:cursor-not-allowed disabled:opacity-40">
               <ChevronRight size={22} />
             </button>
           </div>
-          <Boton
-            onClick={() => {
-              setVista({ a: h.a, m: h.m })
-              setDia(null)
-            }}
-          >
-            Hoy
-          </Boton>
+          <Boton onClick={irHoy}>Hoy</Boton>
         </div>
 
         {/* Contadores: solo cantidades del mes visto */}

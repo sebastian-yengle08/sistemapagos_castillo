@@ -65,6 +65,9 @@ export default function Layout() {
   const avisos = agruparAvisos(recibos, hoyISO()).total
   const menu = MENU[perfil]
   const esEscritorio = useEsEscritorio()
+  // En los formularios se oculta la barra inferior: el teclado del celular y la barra
+  // fija tapaban los campos (por ejemplo, "Monto de cada cuota") y no dejaban escribir.
+  const esFormulario = /^\/(recibos|prestamos)\/(nuevo|[^/]+\/editar)\/?$/.test(pathname)
   const nombre = perfil === 'asistente' ? 'Asistente' : 'Gerente'
 
   return (
@@ -123,7 +126,7 @@ export default function Layout() {
       </main>
 
       {/* Celular: navegación inferior. "Nuevo recibo" es el botón central destacado (asistente) */}
-      {!esEscritorio && (
+      {!esEscritorio && !esFormulario && (
         <nav aria-label="Menú principal" className="fixed inset-x-0 bottom-0 z-30 flex items-end justify-around rounded-t-3xl border-t border-borde bg-white px-2 pb-[max(0.25rem,env(safe-area-inset-bottom))] shadow-[0_-4px_20px_rgba(15,23,42,.08)]">
           {menu.map(({ a, t, I, fin }) =>
             t === 'Nuevo recibo' ? (

@@ -42,6 +42,10 @@ window.addEventListener('online', alVolver)
 buscarVersionNueva()
 
 // Se quitaron las notificaciones: se desregistran los service workers que hayan quedado instalados.
+// También se borran las cachés antiguas para que no se siga mostrando una versión vieja de la app.
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.getRegistrations().then((regs) => regs.forEach((r) => r.unregister())).catch(() => {})
+}
+if ('caches' in window) {
+  window.caches.keys().then((claves) => Promise.all(claves.map((c) => window.caches.delete(c)))).catch(() => {})
 }

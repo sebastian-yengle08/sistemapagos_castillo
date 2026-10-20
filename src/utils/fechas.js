@@ -13,6 +13,11 @@ export function hoyISO() {
 export const FECHA_MINIMA = '2026-01-01'
 export const FECHA_MAXIMA = '2050-12-31'
 
+/** true si la fecha tiene formato aaaa-mm-dd y está dentro del rango permitido. */
+export function fechaEnRango(fecha, min = FECHA_MINIMA, max = FECHA_MAXIMA) {
+  return typeof fecha === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(fecha) && fecha >= min && fecha <= max
+}
+
 export function partes(iso) {
   const [a, m, d] = iso.split('-').map(Number)
   return { a, m, d }

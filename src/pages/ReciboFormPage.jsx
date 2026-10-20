@@ -5,7 +5,7 @@ import { ArrowLeft, AlertTriangle } from 'lucide-react'
 import { Boton, Campo, Chip, Tarjeta, Ventana, claseInput } from '../components/ui'
 import { TIPOS } from '../config/constantes'
 import { buscarDuplicado, crearRecibo, editarRecibo, obtenerRecibo } from '../data/store'
-import { formatoFecha, hoyISO, FECHA_MINIMA, FECHA_MAXIMA } from '../utils/fechas'
+import { formatoFecha, hoyISO, FECHA_MINIMA, FECHA_MAXIMA, fechaEnRango } from '../utils/fechas'
 import { formatoSoles, leerMonto } from '../utils/dinero'
 import { soloLetras, soloLetrasNumeros, soloMonto, soloCodigo, soloDigitos, soloCodigoProveedor } from '../utils/validacion'
 
@@ -33,7 +33,11 @@ export default function ReciboFormPage() {
   const [tipo, setTipo] = useState(original?.tipo ?? '')
   const [empresa, setEmpresa] = useState(original?.empresa ?? '')
   const [codigo, setCodigo] = useState(original?.codigo ?? '')
-  const [fecha, setFecha] = useState(original?.fechaLimite ?? (/^\d{4}-\d{2}-\d{2}$/.test(consulta.get('fecha') ?? '') && consulta.get('fecha') >= fechaMinima ? consulta.get('fecha') : hoy))
+  const [fecha, setFecha] = useState(() => {
+    if (fechaEnRango(original?.fechaLimite)) return original.fechaLimite
+    const deCalendario = consulta.get('fecha')
+    return fechaEnRango(deCalendario) ? deCalendario : hoy
+  })
   const [monto, setMonto] = useState(original ? original.monto.toFixed(2) : '')
   const [errores, setErrores] = useState({})
   const [duplicado, setDuplicado] = useState(null)
@@ -172,7 +176,7 @@ export default function ReciboFormPage() {
           </Campo>
           <Campo etiqueta="Monto total" id="f-monto" error={errores.monto}>
             <div className="relative">
-              <span className="absolute left-4 top-1/2 -translate-y-1/2 font-semibold text-suave">S/</span>
+              <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 font-semibold text-suave">S/</span>
               <input id="f-monto" inputMode="decimal" value={monto} onChange={(e) => setMonto(soloMonto(e.target.value))} placeholder="0.00" className={`${claseInput(errores.monto)} pl-11`} />
             </div>
           </Campo>

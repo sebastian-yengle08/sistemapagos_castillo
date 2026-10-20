@@ -11,7 +11,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { crearDatosEjemplo } from './seed'
 import { hayNube, leerNube, sincronizarNube, suscribirCambios, borrarVoucher } from './persistencia'
-import { hoyISO, FECHA_MINIMA, FECHA_MAXIMA, sumarMeses, partes } from '../utils/fechas'
+import { hoyISO, FECHA_MINIMA, fechaEnRango, sumarMeses, partes } from '../utils/fechas'
 import { PERFILES, MAX_CUOTAS, LIMITE_CUOTA, LIMITE_PRESTAMO } from '../config/constantes'
 
 const CLAVE = 'pagosCastillo.datos.v1'
@@ -46,11 +46,27 @@ function guardarLocal(datos) {
   }
 }
 
+/**
+ * Corrige fechas fuera del rango permitido (por ejemplo, datos locales guardados
+ * por versiones antiguas de la app). Las fechas de pago tampoco pueden ser futuras.
+ */
+function repararFechas(datos) {
+  const hoy = hoyISO()
+  const fecha = (f) => (fechaEnRango(f) ? f : hoy)
+  const fechaPago = (f) => (fechaEnRango(f, FECHA_MINIMA, hoy) ? f : hoy)
+  const recibos = (datos.recibos ?? []).map((r) => {
+    const pago = r.pago?.fecha ? { ...r.pago, fecha: fechaPago(r.pago.fecha) } : r.pago
+    return { ...r, fechaLimite: fecha(r.fechaLimite), pago }
+  })
+  const prestamos = (datos.prestamos ?? []).map((p) => ({ ...p, primeraFecha: fecha(p.primeraFecha) }))
+  return { ...datos, recibos, prestamos }
+}
+
 /** Carga los datos al abrir la app (desde Supabase o localStorage). Llamar una vez. */
 export async function iniciarDatos() {
   if (usaNube) {
     try {
-      const d = await leerNube()
+      const d = repararFechas(await leerNube())
       if (d.recibos.length + d.prestamos.length + d.historial.length === 0) {
         // Base vacía: primer arranque, se cargan los datos de ejemplo
         const ejemplo = crearDatosEjemplo()
@@ -59,13 +75,16 @@ export async function iniciarDatos() {
       } else {
         estado = { seq: 0, ...d }
       }
+      // Se refresca la copia local para que, si Supabase no responde, no vuelvan
+      // a aparecer datos antiguos.
+      guardarLocal(estado)
       return
     } catch (e) {
       usaNube = false // no se pudo conectar: se sigue con localStorage
       avisarError(`No se pudo conectar con Supabase (${e.message}). Se usan datos locales.`)
     }
   }
-  estado = leerLocal() ?? crearDatosEjemplo()
+  estado = repararFechas(leerLocal() ?? crearDatosEjemplo())
   guardarLocal(estado)
 }
 
@@ -237,14 +256,9 @@ export function eliminarRecibo(id) {
   return true
 }
 
-/** La fecha debe tener formato aaaa-mm-dd y estar dentro del rango permitido. */
-function fechaEnRango(fecha, max = FECHA_MAXIMA) {
-  return /^\d{4}-\d{2}-\d{2}$/.test(fecha ?? '') && fecha >= FECHA_MINIMA && fecha <= max
-}
-
 /** La fecha de pago debe estar dentro del rango y no puede ser futura. */
 function fechaPagoValida(fecha) {
-  return fechaEnRango(fecha, hoyISO())
+  return fechaEnRango(fecha, FECHA_MINIMA, hoyISO())
 }
 
 /**

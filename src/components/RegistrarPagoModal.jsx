@@ -7,7 +7,7 @@ import { MEDIOS } from '../config/constantes'
 import { corregirPago, registrarPago, ultimoMedioDeEmpresa } from '../data/store'
 import { subirVoucher } from '../data/persistencia'
 import { comprimirImagen } from '../utils/imagen'
-import { formatoFecha, hoyISO, FECHA_MINIMA } from '../utils/fechas'
+import { formatoFecha, hoyISO, FECHA_MINIMA, fechaEnRango } from '../utils/fechas'
 import { formatoSoles, leerMonto } from '../utils/dinero'
 import { soloMonto } from '../utils/validacion'
 import { interesDePago } from '../utils/prestamos'
@@ -22,7 +22,12 @@ export default function RegistrarPagoModal({ recibo, modo = 'registrar', onCerra
   const interesGuardado = previo ? interesDePago(previo, recibo.monto) : 0
   const [agregarInteres, setAgregarInteres] = useState(false)
   const [interes, setInteres] = useState('')
-  const [fecha, setFecha] = useState(previo?.fecha ?? hoyISO())
+  const [fecha, setFecha] = useState(() => {
+    // Si el pago anterior tuviera una fecha fuera del rango permitido, se muestra hoy
+    // para que el calendario no quede atascado en un año anterior.
+    const anterior = previo?.fecha
+    return fechaEnRango(anterior, FECHA_MINIMA, hoyISO()) ? anterior : hoyISO()
+  })
   const [medio, setMedio] = useState(previo?.medio ?? ultimo)
   
   const [errores, setErrores] = useState({})
@@ -141,7 +146,7 @@ export default function RegistrarPagoModal({ recibo, modo = 'registrar', onCerra
             ayuda={corrigiendo ? 'El monto de un pago ya registrado no se puede modificar.' : esCuota ? 'Calculado automáticamente: cuota + mora/interés.' : 'Es el monto fijo del recibo.'}
           >
             <div className="relative">
-              <span className="absolute left-4 top-1/2 -translate-y-1/2 font-semibold text-suave">S/</span>
+              <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 font-semibold text-suave">S/</span>
               <input
                 id="pago-monto"
                 inputMode="decimal"
@@ -190,7 +195,7 @@ export default function RegistrarPagoModal({ recibo, modo = 'registrar', onCerra
                   ayuda="Se suma al monto de la cuota."
                 >
                   <div className="relative">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 font-semibold text-suave">S/</span>
+                    <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 font-semibold text-suave">S/</span>
                     <input
                       id="pago-interes"
                       inputMode="decimal"
