@@ -36,6 +36,7 @@ export default function PrestamoFormPage() {
     return { cuotas: calcularCuotas({ numCuotas: nCuotas, montoCuota: mCuota, primeraFecha: primera }), minimoCuotas: 0 }
   }, [cuotasOk, editando, original, id, nCuotas, mCuota, primera])
   const montoTotal = Math.round(plan.cuotas.reduce((t, c) => t + c.monto, 0) * 100) / 100
+  const todasPagadas = editando && plan.cuotas.length > 0 && plan.cuotas.every((c) => c.pagada)
 
   if (editando && !original) {
     return (
@@ -76,7 +77,7 @@ export default function PrestamoFormPage() {
       </Link>
       <h1 className="text-2xl font-bold sm:text-3xl">{editando ? 'Editar préstamo' : 'Nuevo préstamo'}</h1>
       <p className="mt-1 text-suave">Escribe la cuota tal como la cobra el banco: el sistema no calcula intereses, solo suma las cuotas para obtener el monto total. La mora o interés se agrega al registrar cada pago.</p>
-      {editando && <p className="mt-2 rounded-xl bg-pend-bg px-4 py-2 text-sm font-semibold text-pend-tx">Las cuotas ya pagadas no cambian. Los cambios se aplican a las cuotas que faltan pagar.</p>}
+      {editando && <p className="mt-2 rounded-xl bg-pend-bg px-4 py-2 text-sm font-semibold text-pend-tx">{todasPagadas ? 'Todas las cuotas están pagadas. El monto nuevo se aplicará si agregas más cuotas.' : 'Las cuotas ya pagadas no cambian. Los cambios se aplican a las cuotas que faltan pagar.'}</p>}
 
       <form noValidate onSubmit={guardar} className="mt-5 flex flex-col gap-5 rounded-2xl border border-borde bg-sup p-4 sm:p-6">
         <Campo etiqueta="Banco o entidad" id="p-ent" error={errores.entidad}>
@@ -96,7 +97,7 @@ export default function PrestamoFormPage() {
               className={claseInput(errores.num)}
             />
           </Campo>
-          <Campo etiqueta="Monto de cada cuota" id="p-cuo" error={errores.cuota} ayuda="Máximo 10 dígitos.">
+          <Campo etiqueta="Monto de cada cuota" id="p-cuo" error={errores.cuota} ayuda={todasPagadas ? 'Todas las cuotas están pagadas; este monto se usará si agregas nuevas cuotas.' : 'Máximo 10 dígitos. Se aplica a las cuotas pendientes.'}>
             <div className="relative">
               <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 font-semibold text-suave">S/</span>
               <input id="p-cuo" inputMode="decimal" value={cuota} onChange={(e) => setCuota(soloMontoCuota(e.target.value))} placeholder="0.00" className={`${claseInput(errores.cuota)} pl-11`} />

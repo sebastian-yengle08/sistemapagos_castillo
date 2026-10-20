@@ -430,7 +430,10 @@ export function editarPrestamo(id, datos) {
     return { id: nuevoId('r'), tipo: 'Préstamo', ...comun, fechaLimite: c.fechaLimite, monto: c.monto, igv: null, estado: 'Pendiente', pago: null, prestamoId: id, cuota: c.numero, creadoEn: ahora }
   })
   const total = Math.round(nuevas.reduce((t, r) => t + r.monto, 0) * 100) / 100
-  const prestamo = { ...actual, entidad, numCuotas: datos.numCuotas, montoCuota: datos.montoCuota, primeraFecha: datos.primeraFecha, montoTotal: total }
+  // Si no queda ninguna cuota pendiente, el monto de cuota del préstamo no cambia:
+  // no tendría ninguna cuota donde aplicarse y quedaría un dato inconsistente.
+  const montoCuota = nuevas.some((r) => r.estado !== 'Pagado') ? datos.montoCuota : actual.montoCuota
+  const prestamo = { ...actual, entidad, numCuotas: datos.numCuotas, montoCuota, primeraFecha: datos.primeraFecha, montoTotal: total }
   publicar({
     ...estado,
     prestamos: estado.prestamos.map((p) => (p.id === id ? prestamo : p)),
