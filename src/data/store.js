@@ -11,7 +11,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { crearDatosEjemplo } from './seed'
 import { hayNube, leerNube, sincronizarNube, suscribirCambios, borrarVoucher } from './persistencia'
-import { hoyISO, sumarMeses, partes } from '../utils/fechas'
+import { hoyISO, inicioAnioISO, sumarMeses, partes } from '../utils/fechas'
 import { PERFILES, MAX_CUOTAS, LIMITE_CUOTA, LIMITE_PRESTAMO } from '../config/constantes'
 
 const CLAVE = 'pagosCastillo.datos.v1'
@@ -181,6 +181,7 @@ export function ultimoMedioDeEmpresa(empresa) {
 
 // ── Recibos ─────────────────────────────────────────────────────────────────
 export function crearRecibo(datos) {
+  if (!fechaDesdeAnioActual(datos.fechaLimite)) return null
   const id = nuevoId('r')
   const recibo = {
     id,
@@ -210,6 +211,7 @@ export function editarRecibo(id, cambios) {
   const actual = obtenerRecibo(id)
   // Las cuotas de préstamo y los recibos pagados no se editan (un pagado se corrige con corregirPago)
   if (!actual || actual.prestamoId || actual.estado === 'Pagado') return null
+  if (cambios.fechaLimite !== undefined && !fechaDesdeAnioActual(cambios.fechaLimite)) return null
   const nuevo = { ...actual, ...cambios, empresa: (cambios.empresa ?? actual.empresa).trim(), codigo: (cambios.codigo ?? actual.codigo).trim() }
   const tocados = Object.keys(ETIQUETAS_CAMPO).filter((k) => (actual[k] ?? null) !== (nuevo[k] ?? null))
   const texto = tocados.length === 1
@@ -235,9 +237,14 @@ export function eliminarRecibo(id) {
   return true
 }
 
-/** La fecha de pago debe tener formato aaaa-mm-dd y no puede ser posterior a hoy en Lima. */
+/** La fecha debe tener formato aaaa-mm-dd y ser del año actual o posterior. */
+function fechaDesdeAnioActual(fecha) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(fecha ?? '') && fecha >= inicioAnioISO()
+}
+
+/** La fecha de pago debe ser del año actual o posterior y no puede ser futura. */
 function fechaPagoValida(fecha) {
-  return /^\d{4}-\d{2}-\d{2}$/.test(fecha ?? '') && fecha <= hoyISO()
+  return fechaDesdeAnioActual(fecha) && fecha <= hoyISO()
 }
 
 /**
@@ -327,6 +334,7 @@ export function calcularCuotas({ numCuotas, montoCuota, primeraFecha }) {
 /** datos: { entidad, montoTotal, numCuotas, montoCuota, primeraFecha } */
 export function crearPrestamo(datos) {
   if (actor !== 'asistente') return null // los préstamos los gestiona el asistente
+  if (!fechaDesdeAnioActual(datos.primeraFecha)) return null
   if (!Number.isInteger(datos.numCuotas) || datos.numCuotas < 1 || datos.numCuotas > MAX_CUOTAS) return null
   if (!(datos.montoCuota > 0) || datos.montoCuota > LIMITE_CUOTA) return null
   if (!(datos.montoTotal > 0) || datos.montoTotal > LIMITE_PRESTAMO) return null
@@ -391,6 +399,7 @@ export function planEdicionPrestamo(id, { numCuotas, montoCuota, primeraFecha })
 export function editarPrestamo(id, datos) {
   const actual = obtenerPrestamo(id)
   if (!actual || actor !== 'asistente') return null
+  if (datos.primeraFecha !== undefined && !fechaDesdeAnioActual(datos.primeraFecha)) return null
   if (!Number.isInteger(datos.numCuotas) || datos.numCuotas < 1 || datos.numCuotas > MAX_CUOTAS) return null
   if (!(datos.montoCuota > 0) || datos.montoCuota > LIMITE_CUOTA) return null
   if (!(datos.montoTotal > 0) || datos.montoTotal > LIMITE_PRESTAMO) return null

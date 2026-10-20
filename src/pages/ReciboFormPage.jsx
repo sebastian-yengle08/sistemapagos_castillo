@@ -5,7 +5,7 @@ import { ArrowLeft, AlertTriangle } from 'lucide-react'
 import { Boton, Campo, Chip, Tarjeta, Ventana, claseInput } from '../components/ui'
 import { TIPOS } from '../config/constantes'
 import { buscarDuplicado, crearRecibo, editarRecibo, obtenerRecibo } from '../data/store'
-import { formatoFecha, hoyISO } from '../utils/fechas'
+import { formatoFecha, hoyISO, inicioAnioISO } from '../utils/fechas'
 import { formatoSoles, leerMonto } from '../utils/dinero'
 import { soloLetras, soloLetrasNumeros, soloMonto, soloCodigo, soloDigitos, soloCodigoProveedor } from '../utils/validacion'
 
@@ -24,6 +24,7 @@ export default function ReciboFormPage() {
   const { state } = useLocation()
   const origen = state?.origen // pantalla de la que se vino (se conserva al volver al detalle)
   const hoy = hoyISO() // fecha de hoy en Lima
+  const inicioAnio = inicioAnioISO() // todas las fechas deben ser del año actual o posterior
   const [original] = useState(() => (id ? obtenerRecibo(id) : null))
   // Los préstamos se registran en su propia sección (menú Préstamos), no como recibo suelto
   const tiposDisponibles = TIPOS.filter((t) => t !== 'Préstamo' || original?.tipo === 'Préstamo')
@@ -31,7 +32,7 @@ export default function ReciboFormPage() {
   const [tipo, setTipo] = useState(original?.tipo ?? '')
   const [empresa, setEmpresa] = useState(original?.empresa ?? '')
   const [codigo, setCodigo] = useState(original?.codigo ?? '')
-  const [fecha, setFecha] = useState(original?.fechaLimite ?? (/^\d{4}-\d{2}-\d{2}$/.test(consulta.get('fecha') ?? '') && consulta.get('fecha') >= hoy ? consulta.get('fecha') : hoy))
+  const [fecha, setFecha] = useState(original?.fechaLimite ?? (/^\d{4}-\d{2}-\d{2}$/.test(consulta.get('fecha') ?? '') && consulta.get('fecha') >= inicioAnio ? consulta.get('fecha') : hoy))
   const [monto, setMonto] = useState(original ? original.monto.toFixed(2) : '')
   const [errores, setErrores] = useState({})
   const [duplicado, setDuplicado] = useState(null)
@@ -88,8 +89,7 @@ export default function ReciboFormPage() {
     else if (esProveedor && !/^[a-zA-Z0-9áéíóúÁÉÍÓÚñÑüÜ-]+$/.test(codigo.trim())) e.codigo = 'El código solo puede tener letras, números y guion medio.'
     else if (!/[a-zA-Z0-9]/.test(codigo)) e.codigo = 'Escribe un código válido.'
     if (!fecha) e.fecha = 'Elige la fecha límite de pago.'
-    // Al editar, la fecha original se puede conservar aunque ya haya pasado; una fecha nueva no puede ser anterior a hoy
-    else if (fecha < hoy && !(editando && fecha === original.fechaLimite)) e.fecha = 'La fecha límite no puede ser anterior a hoy'
+    else if (fecha < inicioAnio) e.fecha = 'La fecha límite debe ser del año actual o posterior.'
     const m = leerMonto(monto)
     if (monto.trim() === '') e.monto = 'Escribe el monto total.'
     else if (!(m > 0)) e.monto = 'Escribe un monto válido, mayor a cero.'
@@ -110,11 +110,13 @@ export default function ReciboFormPage() {
     const previo = buscarDuplicado(codigo, editando ? id : null)
     if (previo) return setDuplicado(previo)
     if (editando) {
-      editarRecibo(id, datos)
+      const editado = editarRecibo(id, datos)
+      if (!editado) return setErrores({ fecha: 'La fecha límite debe ser del año actual o posterior.' })
       navegar(`/recibos/${id}`, { replace: true, state: { origen, aviso: 'Cambios guardados' } })
       return
     }
     const nuevo = crearRecibo(datos)
+    if (!nuevo) return setErrores({ fecha: 'La fecha límite debe ser del año actual o posterior.' })
     navegar('/', { replace: true, state: { aviso: `Recibo guardado: ${nuevo.empresa}` } })
   }
 
@@ -164,7 +166,7 @@ export default function ReciboFormPage() {
         </Campo>
         <div className="grid gap-5 sm:grid-cols-2">
           <Campo etiqueta={etiquetaFecha} id="f-fecha" error={errores.fecha}>
-            <input id="f-fecha" type="date" min={hoy} value={fecha} onChange={(e) => setFecha(e.target.value)} className={claseInput(errores.fecha)} />
+            <input id="f-fecha" type="date" min={inicioAnio} value={fecha} onChange={(e) => setFecha(e.target.value)} className={claseInput(errores.fecha)} />
           </Campo>
           <Campo etiqueta="Monto total" id="f-monto" error={errores.monto}>
             <div className="relative">

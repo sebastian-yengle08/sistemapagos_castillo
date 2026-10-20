@@ -9,6 +9,11 @@ export function hoyISO() {
   return new Intl.DateTimeFormat('en-CA', { timeZone: ZONA, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
 }
 
+/** 1 de enero del año actual en Lima, como "aaaa-mm-dd". */
+export function inicioAnioISO() {
+  return `${hoyISO().slice(0, 4)}-01-01`
+}
+
 export function partes(iso) {
   const [a, m, d] = iso.split('-').map(Number)
   return { a, m, d }

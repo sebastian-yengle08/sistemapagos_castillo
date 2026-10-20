@@ -7,7 +7,7 @@ import { MEDIOS } from '../config/constantes'
 import { corregirPago, registrarPago, ultimoMedioDeEmpresa } from '../data/store'
 import { subirVoucher } from '../data/persistencia'
 import { comprimirImagen } from '../utils/imagen'
-import { formatoFecha, hoyISO } from '../utils/fechas'
+import { formatoFecha, hoyISO, inicioAnioISO } from '../utils/fechas'
 import { formatoSoles, leerMonto } from '../utils/dinero'
 import { soloMonto } from '../utils/validacion'
 import { interesDePago } from '../utils/prestamos'
@@ -29,6 +29,7 @@ export default function RegistrarPagoModal({ recibo, modo = 'registrar', onCerra
   const [listo, setListo] = useState(false)
   const [guardando, setGuardando] = useState(false)
   const hoy = hoyISO() // fecha de hoy en Lima: la fecha de pago no puede ser futura
+  const inicioAnio = inicioAnioISO() // la fecha de pago no puede ser de un año anterior
 
   // Monto pagado = monto de la cuota/recibo + mora/interés. Siempre es calculado.
   const montoBase = Number(recibo.monto) || 0
@@ -72,6 +73,7 @@ export default function RegistrarPagoModal({ recibo, modo = 'registrar', onCerra
     else if (agregarInteres && interesNum < 0) e.interes = 'La mora o interés no puede ser negativo.'
     if (!fecha) e.fecha = 'Elige la fecha de pago.'
     else if (fecha > hoy) e.fecha = 'La fecha de pago no puede ser posterior a hoy.'
+    else if (fecha < inicioAnio) e.fecha = 'La fecha de pago no puede ser anterior al 1 de enero de este año.'
     if (!medio) e.medio = 'Elige cómo se pagó.'
     if (!vista) e.foto = 'Sube la foto del voucher.'
     setErrores(e)
@@ -153,6 +155,7 @@ export default function RegistrarPagoModal({ recibo, modo = 'registrar', onCerra
             <input
               id="pago-fecha"
               type="date"
+              min={inicioAnio}
               max={hoy}
               value={fecha}
               onChange={(e) => setFecha(e.target.value)}
