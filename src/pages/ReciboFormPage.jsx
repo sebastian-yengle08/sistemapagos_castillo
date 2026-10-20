@@ -31,7 +31,8 @@ export default function ReciboFormPage() {
   // Los préstamos se registran en su propia sección (menú Préstamos), no como recibo suelto
   const tiposDisponibles = TIPOS.filter((t) => t !== 'Préstamo' || original?.tipo === 'Préstamo')
 
-  const [tipo, setTipo] = useState(original?.tipo ?? '')
+  // Al crear un recibo se empieza con Servicio para que el código aplique su límite desde el inicio.
+  const [tipo, setTipo] = useState(original?.tipo ?? 'Servicio')
   const [empresa, setEmpresa] = useState(original?.empresa ?? '')
   const [codigo, setCodigo] = useState(original?.codigo ?? '')
   const [fecha, setFecha] = useState(() => {
