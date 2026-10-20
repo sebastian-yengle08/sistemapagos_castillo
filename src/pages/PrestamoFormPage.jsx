@@ -7,7 +7,7 @@ import { Boton, Campo, Insignia, Tarjeta, Vacio, claseInput } from '../component
 import { calcularCuotas, crearPrestamo, editarPrestamo, motivoRechazo, obtenerPrestamo, planEdicionPrestamo } from '../data/store'
 import { useDatos } from '../data/useDatos'
 import { LIMITE_PRESTAMO, LIMITE_CUOTA, MAX_CUOTAS, NOMBRE_MIN, NOMBRE_MAX } from '../config/constantes'
-import { formatoFecha, hoyISO, FECHA_MINIMA, fechaMaxima } from '../utils/fechas'
+import { formatoFecha, hoyISO, fechaMaxima } from '../utils/fechas'
 import { formatoSoles, leerMonto } from '../utils/dinero'
 import { limpiarNombre, soloLetras, soloMontoCuota } from '../utils/validacion'
 
@@ -16,7 +16,9 @@ export default function PrestamoFormPage() {
   const editando = !!id
   const navegar = useNavigate()
   const hoy = hoyISO() // fecha de hoy en Lima
-  const fechaMinima = FECHA_MINIMA // 1 de enero de 2026
+  // Una fecha nueva de cuota no puede ser anterior a hoy. Si al editar una cuota ya vencida
+  // no se cambia su fecha, se conserva para no bloquear los demás cambios del préstamo.
+  const fechaMinima = hoy
   const fechaMax = fechaMaxima() // hoy + 24 años
   const [original] = useState(() => (id ? obtenerPrestamo(id) : null))
   const { recibos } = useDatos()
@@ -24,26 +26,37 @@ export default function PrestamoFormPage() {
   const [entidad, setEntidad] = useState(original?.entidad ?? '')
   const [num, setNum] = useState(original ? String(original.numCuotas) : '')
   const [cuota, setCuota] = useState(original ? original.montoCuota.toFixed(2) : '')
-  const [primera, setPrimera] = useState(() => original?.primeraFecha ?? hoy)
   const [errores, setErrores] = useState({})
+  const [primeraManual, setPrimeraManual] = useState(null) // null = usar la fecha calculada de la primera cuota pendiente
 
   const cuotasPrestamo = editando ? recibos.filter((r) => r.prestamoId === id) : []
   const hayPagos = cuotasPrestamo.some((r) => r.estado === 'Pagado')
   const todasPagadas = cuotasPrestamo.length > 0 && cuotasPrestamo.every((r) => r.estado === 'Pagado')
   const cuotaBloqueada = editando && hayPagos
+  const primeraPendiente = editando
+    ? [...cuotasPrestamo].filter((r) => r.estado !== 'Pagado').sort((a, b) => a.cuota - b.cuota)[0] ?? null
+    : null
+  // Al editar, la fecha que se cambia es la de la primera cuota pendiente (o la primera si aún no hay pagos).
+  const fechaBase = editando ? (primeraPendiente?.fechaLimite ?? original?.primeraFecha ?? hoy) : hoy
+  const primera = primeraManual ?? fechaBase
+  const etiquetaFecha = primeraPendiente && primeraPendiente.cuota > 1 ? `Fecha de la cuota ${primeraPendiente.cuota}` : 'Fecha de la primera cuota'
+  const fechaPendienteActual = primeraPendiente?.fechaLimite ?? null
+  const fechaEsLaActual = editando && !!fechaPendienteActual && primera === fechaPendienteActual
+  const fechaVencidaSinCambios = editando && !!fechaPendienteActual && fechaPendienteActual < hoy && fechaEsLaActual
+  const fechaOk = todasPagadas || (!!primera && primera <= fechaMax && (primera >= fechaMinima || fechaEsLaActual))
 
   const nCuotas = Number(num)
   const mCuota = leerMonto(cuota)
   // Si ya hay cuotas pagadas, el monto de la cuota queda bloqueado.
   const montoCuotaEfectivo = cuotaBloqueada ? (original?.montoCuota ?? 0) : mCuota
-  const cuotasOk = Number.isInteger(nCuotas) && nCuotas >= 1 && nCuotas <= MAX_CUOTAS && montoCuotaEfectivo > 0 && montoCuotaEfectivo <= LIMITE_CUOTA && !!primera && primera >= fechaMinima && primera <= fechaMax
+  const cuotasOk = Number.isInteger(nCuotas) && nCuotas >= 1 && nCuotas <= MAX_CUOTAS && montoCuotaEfectivo > 0 && montoCuotaEfectivo <= LIMITE_CUOTA && fechaOk
 
   // Vista previa de cuotas (al editar, las ya pagadas se muestran como Pagado y no cambian)
   const plan = useMemo(() => {
     if (!cuotasOk) return { cuotas: [], minimoCuotas: 0 }
     if (editando && original) return planEdicionPrestamo(id, { numCuotas: nCuotas, montoCuota: montoCuotaEfectivo, primeraFecha: primera })
     return { cuotas: calcularCuotas({ numCuotas: nCuotas, montoCuota: montoCuotaEfectivo, primeraFecha: primera }), minimoCuotas: 0 }
-  }, [cuotasOk, editando, original, id, nCuotas, montoCuotaEfectivo, primera])
+  }, [cuotasOk, editando, original, id, nCuotas, montoCuotaEfectivo, primera, recibos])
   const montoTotal = Math.round(plan.cuotas.reduce((t, c) => t + c.monto, 0) * 100) / 100
 
   if (editando && !original) {
@@ -56,7 +69,7 @@ export default function PrestamoFormPage() {
     )
   }
 
-  // Fecha de la última cuota: no puede pasar del rango permitido (dic 2050)
+  // Fecha de la última cuota: no puede pasar del rango permitido (hoy + 24 años)
   const ultimaFecha = plan.cuotas[plan.cuotas.length - 1]?.fechaLimite
   const volverA = editando ? `/prestamos/${id}` : '/prestamos'
 
@@ -64,16 +77,26 @@ export default function PrestamoFormPage() {
     e.preventDefault()
     const er = {}
     const nombreBanco = limpiarNombre(entidad)
+    const sujetoFecha = primeraPendiente?.cuota > 1 ? `la cuota ${primeraPendiente.cuota}` : 'la primera cuota'
     if (!nombreBanco) er.entidad = 'Escribe el banco o la entidad.'
     else if (nombreBanco.length < NOMBRE_MIN) er.entidad = `El nombre debe tener al menos ${NOMBRE_MIN} caracteres.`
     if (!(Number.isInteger(nCuotas) && nCuotas >= 1 && nCuotas <= MAX_CUOTAS)) er.num = `Escribe cuántas cuotas son (de 1 a ${MAX_CUOTAS}).`
     else if (editando && cuotasOk && nCuotas < plan.minimoCuotas) er.num = `Ya hay cuotas pagadas hasta la ${plan.minimoCuotas}: no puede haber menos.`
-    else if (cuotasOk && ultimaFecha > fechaMax) er.num = `La última cuota caería el ${formatoFecha(ultimaFecha)}, después del ${formatoFecha(fechaMax)}. Baja el número de cuotas o adelanta la primera fecha.`
+    if (cuotasOk && ultimaFecha > fechaMax) {
+      const mensaje = `La última cuota caería el ${formatoFecha(ultimaFecha)}, después del ${formatoFecha(fechaMax)}. ${editando ? 'Adelanta la fecha de las cuotas pendientes.' : 'Baja el número de cuotas o adelanta la primera fecha.'}`
+      if (editando) er.primera = mensaje
+      else er.num = mensaje
+    }
     if (!(montoCuotaEfectivo > 0)) er.cuota = 'Escribe el monto de cada cuota.'
     else if (montoCuotaEfectivo > LIMITE_CUOTA) er.cuota = 'El monto de cada cuota no puede superar los 10 dígitos.'
-    if (!primera) er.primera = 'Elige la fecha de la primera cuota.'
-    else if (primera < fechaMinima) er.primera = `La fecha de la primera cuota debe ser desde el ${formatoFecha(fechaMinima)}.`
-    else if (primera > fechaMax) er.primera = `La fecha de la primera cuota no puede ser posterior al ${formatoFecha(fechaMax)}.`
+    if (!todasPagadas) {
+      if (!primera) er.primera = `Elige la fecha de ${sujetoFecha}.`
+      else if (primera < fechaMinima && !fechaEsLaActual) {
+        er.primera = editando
+          ? `La fecha de ${sujetoFecha} no puede ser anterior a hoy (${formatoFecha(hoy)}).`
+          : `La fecha de la primera cuota no puede ser anterior a hoy (${formatoFecha(hoy)}).`
+      } else if (primera > fechaMax) er.primera = `La fecha de ${sujetoFecha} no puede ser posterior al ${formatoFecha(fechaMax)}.`
+    }
     if (montoTotal > LIMITE_PRESTAMO) er.cuota = `El monto total del préstamo (suma de las cuotas) no puede superar ${formatoSoles(LIMITE_PRESTAMO)}. Baja el monto o el número de cuotas.`
     setErrores(er)
     if (Object.keys(er).length) return
@@ -109,17 +132,19 @@ export default function PrestamoFormPage() {
           <input id="p-ent" maxLength={NOMBRE_MAX} value={entidad} onChange={(e) => setEntidad(soloLetras(e.target.value))} placeholder="Ej.: Banco de Crédito" className={claseInput(errores.entidad)} />
         </Campo>
         <div className="grid gap-5 sm:grid-cols-2">
-          <Campo etiqueta="Número de cuotas" id="p-num" error={errores.num} ayuda={`De 1 a ${MAX_CUOTAS} cuotas.`}>
+          <Campo etiqueta="Número de cuotas" id="p-num" error={errores.num} ayuda={editando ? 'El número de cuotas no se puede cambiar al editar un préstamo.' : `De 1 a ${MAX_CUOTAS} cuotas.`}>
             <input
               id="p-num"
               inputMode="numeric"
               value={num}
               onChange={(e) => {
+                if (editando) return
                 const digitos = e.target.value.replace(/\D/g, '')
                 setNum(digitos === '' ? '' : String(Math.min(Number(digitos), MAX_CUOTAS)))
               }}
+              disabled={editando}
               placeholder="Ej.: 12"
-              className={claseInput(errores.num)}
+              className={`${claseInput(errores.num)} disabled:cursor-not-allowed disabled:bg-slate-900/[.05] disabled:text-suave`}
             />
           </Campo>
           <Campo etiqueta="Monto de cada cuota" id="p-cuo" error={errores.cuota} ayuda={cuotaBloqueada ? 'Bloqueado: ya hay cuotas pagadas. Solo se puede cambiar si no hay ningún pago.' : 'Máximo 10 dígitos. Se aplica a las cuotas pendientes.'}>
@@ -127,6 +152,7 @@ export default function PrestamoFormPage() {
               <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 font-semibold text-suave">S/</span>
               <input
                 id="p-cuo"
+                autoComplete="new-password"
                 inputMode="decimal"
                 value={cuotaBloqueada ? (original?.montoCuota ?? 0).toFixed(2) : cuota}
                 onChange={(e) => setCuota(soloMontoCuota(e.target.value))}
@@ -136,8 +162,30 @@ export default function PrestamoFormPage() {
               />
             </div>
           </Campo>
-          <Campo etiqueta="Fecha de la primera cuota" id="p-fec" error={errores.primera}>
-            <input id="p-fec" type="date" min={fechaMinima} max={fechaMax} value={primera} onChange={(e) => setPrimera(e.target.value)} className={claseInput(errores.primera)} />
+          <Campo
+            etiqueta={etiquetaFecha}
+            id="p-fec"
+            error={errores.primera}
+            ayuda={
+              todasPagadas
+                ? 'Todas las cuotas están pagadas.'
+                : fechaVencidaSinCambios
+                  ? 'La cuota ya está vencida. Si cambias la fecha, debe ser hoy o después.'
+                  : primeraPendiente && primeraPendiente.cuota > 1
+                    ? 'Debe ser hoy o una fecha futura. Las cuotas pendientes se reprograman desde esta fecha.'
+                    : 'Debe ser hoy o una fecha futura.'
+            }
+          >
+            <input
+              id="p-fec"
+              type="date"
+              min={fechaMinima}
+              max={fechaMax}
+              value={primera}
+              onChange={(e) => setPrimeraManual(e.target.value)}
+              disabled={todasPagadas}
+              className={`${claseInput(errores.primera)} disabled:cursor-not-allowed disabled:bg-slate-900/[.05] disabled:text-suave`}
+            />
           </Campo>
         </div>
 

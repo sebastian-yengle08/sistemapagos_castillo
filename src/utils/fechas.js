@@ -15,8 +15,20 @@ export const FECHA_MINIMA = '2026-01-01'
 /** Última fecha permitida: 24 años después de hoy (se mueve con el calendario). */
 export const fechaMaxima = () => sumarMeses(hoyISO(), ANIOS_MAXIMOS * 12)
 
+/** Primer día del mes actual en Lima, como "aaaa-mm-dd". */
+export function inicioDeMesActual() {
+  const { a, m } = partes(hoyISO())
+  return armar(a, m, 1)
+}
+
+/** Último día del mes actual en Lima, como "aaaa-mm-dd". */
+export function finDeMesActual() {
+  const { a, m } = partes(hoyISO())
+  return armar(a, m, diasDelMes(a, m))
+}
+
 /** Texto del rango permitido para mensajes: "entre el 01/01/2026 y el dd/mm/aaaa". */
-export const textoRangoFechas = () => `entre el ${formatoFecha(FECHA_MINIMA)} y el ${formatoFecha(fechaMaxima())}`
+export const textoRangoFechas = (max = fechaMaxima()) => `entre el ${formatoFecha(FECHA_MINIMA)} y el ${formatoFecha(max)}`
 
 /** true si es una fecha real del calendario con formato aaaa-mm-dd (no existe el 30 de febrero). */
 export function fechaReal(fecha) {

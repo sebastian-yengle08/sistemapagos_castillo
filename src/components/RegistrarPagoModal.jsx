@@ -48,7 +48,8 @@ export default function RegistrarPagoModal({ recibo, modo = 'registrar', onCerra
 
   // Foto del voucher: la ya guardada (al corregir) o una nueva elegida ahora (se sube al confirmar)
   const [fotoGuardada] = useState(previo?.foto ? { url: previo.foto, path: previo.fotoPath ?? null } : null)
-  const [fotoNueva, setFotoNueva] = useState(null) // { blob, vista }
+  const [fotoNueva, setFotoNueva] = useState(null) // { blob, hash, vista }
+  const [fotoRechazada, setFotoRechazada] = useState(false) // se intentó subir una foto repetida
   const [procesando, setProcesando] = useState(false)
   const camara = useRef(null)
   const galeria = useRef(null)
@@ -64,9 +65,24 @@ export default function RegistrarPagoModal({ recibo, modo = 'registrar', onCerra
     try {
       const blob = await comprimirImagen(archivo)
       const hash = await hashBlob(blob)
+      // Al corregir, la foto no puede ser la misma que ya tiene este pago...
+      const misma = corrigiendo && !!previo?.fotoHash && hash === previo.fotoHash
+      // ...ni la misma que ya se usó en otro pago.
       const repetida = buscarFotoRepetida(hash, recibo.id)
-      if (repetida) throw Object.assign(new Error(`Esta foto ya se usó en el pago del recibo de ${repetida.empresa} (${repetida.codigo}). Cada pago necesita su propio voucher.`), { usuario: true })
+      if (misma || repetida) {
+        setFotoNueva(null) // se descarta la foto rechazada y se vuelve a la guardada
+        setFotoRechazada(true) // bloquea "Guardar corrección" hasta elegir otra o mantener la actual
+        throw Object.assign(
+          new Error(
+            misma
+              ? 'Esta es la misma foto que ya tiene este pago. Elige una foto distinta.'
+              : `Esta foto ya se usó en el pago del recibo de ${repetida.empresa} (${repetida.codigo}). Cada pago necesita su propio voucher.`,
+          ),
+          { usuario: true },
+        )
+      }
       setFotoNueva({ blob, hash, vista: URL.createObjectURL(blob) })
+      setFotoRechazada(false)
       setErrores((x) => ({ ...x, foto: undefined }))
     } catch (err) {
       setErrores((x) => ({ ...x, foto: err.usuario ? err.message : 'No se pudo leer esa foto. Prueba con otra.' }))
@@ -75,7 +91,14 @@ export default function RegistrarPagoModal({ recibo, modo = 'registrar', onCerra
   }
   const vista = fotoNueva?.vista ?? fotoGuardada?.url ?? null
 
+  function mantenerFotoActual() {
+    setFotoNueva(null)
+    setFotoRechazada(false)
+    setErrores((x) => ({ ...x, foto: undefined }))
+  }
+
   async function confirmar() {
+    if (fotoRechazada) return // hay que elegir otra foto o mantener la actual
     const e = {}
     if (!(totalPagado > 0)) e.monto = 'El monto pagado debe ser mayor a cero.'
     else if (!corrigiendo && totalPagado < montoBase) e.monto = `El monto pagado no puede ser menor al monto ${esCuota ? 'de la cuota' : 'del recibo'} (${formatoSoles(montoBase)}).`
@@ -208,6 +231,7 @@ export default function RegistrarPagoModal({ recibo, modo = 'registrar', onCerra
                     <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 font-semibold text-suave">S/</span>
                     <input
                       id="pago-interes"
+                      autoComplete="new-password"
                       inputMode="decimal"
                       value={interes}
                       onChange={(e) => setInteres(soloMontoCuota(e.target.value))}
@@ -273,6 +297,11 @@ export default function RegistrarPagoModal({ recibo, modo = 'registrar', onCerra
               {errores.foto}
             </p>
           )}
+          {fotoRechazada && fotoGuardada && (
+            <Boton onClick={mantenerFotoActual} className="mt-2 !min-h-11 w-full sm:w-auto">
+              Mantener foto actual
+            </Boton>
+          )}
         </div>
 
         {errores.general && (
@@ -281,7 +310,7 @@ export default function RegistrarPagoModal({ recibo, modo = 'registrar', onCerra
           </p>
         )}
 
-        <Boton variante="primario" grande onClick={confirmar} disabled={guardando || procesando}>
+        <Boton variante="primario" grande onClick={confirmar} disabled={guardando || procesando || fotoRechazada}>
           {guardando ? (
             <>
               <Loader2 size={20} className="animate-spin" aria-hidden="true" /> Guardando…

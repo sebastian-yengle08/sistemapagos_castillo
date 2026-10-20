@@ -8,7 +8,7 @@ import { useDatos } from '../data/useDatos'
 import { Boton, Tarjeta, Vacio, Ventana } from '../components/ui'
 import ReciboFila from '../components/ReciboFila'
 import { estadoVisible } from '../utils/estado'
-import { armar, diaSemanaLunes, diasDelMes, fechaLarga, hoyISO, nombreDia, nombreMes, partes, FECHA_MINIMA, fechaMaxima } from '../utils/fechas'
+import { armar, diaSemanaLunes, diasDelMes, fechaLarga, hoyISO, nombreDia, nombreMes, partes, FECHA_MINIMA, fechaMaxima, finDeMesActual } from '../utils/fechas'
 import { formatoSoles } from '../utils/dinero'
 
 const SEMANA = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
@@ -40,6 +40,7 @@ export default function CalendarioPage() {
   const { perfil } = useAuth()
   const { state } = useLocation()
   const hoy = hoyISO()
+  const fechaMaxRecibo = finDeMesActual() // los recibos nuevos no pueden pasar de este mes
   const h = partes(hoy)
   const limiteMax = partes(fechaMaxima())
   const TOTAL_MAX = limiteMax.a * 12 + (limiteMax.m - 1)
@@ -49,6 +50,7 @@ export default function CalendarioPage() {
     return { a: Math.floor(acotado / 12), m: (acotado % 12) + 1 }
   })
   const [dia, setDia] = useState(null) // día tocado (aaaa-mm-dd)
+  const [filtro, setFiltro] = useState('Todos') // Todos | Pagado | Pendiente | Vencido
 
   const totalVista = vista.a * 12 + (vista.m - 1)
   const movimiento = (n) => {
@@ -77,11 +79,13 @@ export default function CalendarioPage() {
     return c
   }, [recibos, vista, hoy])
 
-  // Hasta 3 vencidos (los más atrasados) y luego los próximos 6: así los vencidos no tapan a los que vienen
-  const proximos = useMemo(() => {
-    const sinPagar = recibos.filter((r) => r.estado !== 'Pagado').sort((a, b) => (a.fechaLimite < b.fechaLimite ? -1 : 1))
-    return [...sinPagar.filter((r) => r.fechaLimite < hoy).slice(0, 3), ...sinPagar.filter((r) => r.fechaLimite >= hoy).slice(0, 6)]
-  }, [recibos, hoy])
+  // Pagos del mes que se está viendo (incluye los ya pagados), según el filtro elegido
+  const pagosMes = useMemo(() => {
+    const prefijo = `${vista.a}-${String(vista.m).padStart(2, '0')}-`
+    return recibos
+      .filter((r) => r.fechaLimite.startsWith(prefijo) && (filtro === 'Todos' || estadoVisible(r, hoy) === filtro))
+      .sort((a, b) => (a.fechaLimite < b.fechaLimite ? -1 : a.fechaLimite > b.fechaLimite ? 1 : 0))
+  }, [recibos, vista, hoy, filtro])
 
   // Celdas del mes (con huecos al inicio según el día de la semana)
   const celdas = useMemo(() => {
@@ -104,10 +108,15 @@ export default function CalendarioPage() {
       </span>
     </div>
   )
-  const agregarDia = dia && dia >= hoy && perfil === 'asistente' && (
+  const agregarDia = dia && dia >= hoy && dia <= fechaMaxRecibo && perfil === 'asistente' && (
     <Link to={`/recibos/nuevo?fecha=${dia}`} className="mt-3 flex min-h-12 items-center justify-center gap-2 rounded-full bg-brand font-semibold text-white shadow-sm hover:brightness-110">
       <Plus size={20} aria-hidden="true" /> Agregar recibo a este día
     </Link>
+  )
+  const avisoFecha = dia && dia > fechaMaxRecibo && perfil === 'asistente' && (
+    <p className="mt-3 rounded-xl border border-dashed border-slate-300 bg-slate-900/[.03] px-4 py-3 text-center text-sm text-suave">
+      Solo puedes registrar recibos con fecha hasta el {fechaLarga(fechaMaxRecibo)}.
+    </p>
   )
 
   const panelDia = dia && (
@@ -130,6 +139,7 @@ export default function CalendarioPage() {
         )}
       </div>
       {agregarDia}
+      {avisoFecha}
     </Tarjeta>
   )
 
@@ -222,18 +232,45 @@ export default function CalendarioPage() {
         )}
       </div>
 
-      {/* Columna derecha: día elegido (escritorio) + próximos pagos */}
+      {/* Columna derecha: día elegido (escritorio) + pagos del mes */}
       <aside className="flex flex-col gap-4">
         <div className="hidden xl:block">{panelDia}</div>
-        <section aria-labelledby="prox">
-          <h2 id="prox" className="mb-2 text-xl font-bold">
-            Próximos pagos
-          </h2>
-          {proximos.length === 0 ? (
-            <Vacio icono={CheckCircle2} titulo="Estás al día" texto="No hay pagos pendientes por ahora." />
+        <section aria-labelledby="pagos-mes">
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <h2 id="pagos-mes" className="text-xl font-bold">
+              Pagos del mes
+            </h2>
+            <select
+              value={filtro}
+              onChange={(e) => setFiltro(e.target.value)}
+              aria-label="Filtrar pagos del mes por estado"
+              className="h-11 rounded-xl border border-borde bg-sup px-3 text-sm font-semibold text-tinta outline-none transition focus:border-brand focus:ring-4 focus:ring-brand/25"
+            >
+              <option value="Todos">Todos</option>
+              <option value="Pagado">Pagados</option>
+              <option value="Pendiente">Pendientes</option>
+              <option value="Vencido">Vencidos</option>
+            </select>
+          </div>
+          {pagosMes.length === 0 ? (
+            <Vacio
+              icono={filtro === 'Pagado' ? CheckCircle2 : filtro === 'Pendiente' ? Clock : filtro === 'Vencido' ? AlertCircle : CalendarOff}
+              titulo={
+                filtro === 'Pagado' ? 'No hay pagos completados este mes' : filtro === 'Pendiente' ? 'No hay pagos pendientes este mes' : filtro === 'Vencido' ? 'No hay pagos vencidos este mes' : 'No hay pagos este mes'
+              }
+              texto={
+                filtro === 'Pagado'
+                  ? 'Los recibos pagados de este mes aparecerán aquí.'
+                  : filtro === 'Pendiente'
+                    ? 'No quedan recibos por pagar en este mes.'
+                    : filtro === 'Vencido'
+                      ? 'No hay recibos sin pagar con fecha límite vencida en este mes.'
+                      : 'Cuando se registren recibos con fecha límite en este mes, aparecerán aquí.'
+              }
+            />
           ) : (
-            <div className="flex flex-col gap-2">
-              {proximos.map((r) => (
+            <div className="flex flex-col gap-2 xl:max-h-[32rem] xl:overflow-y-auto xl:overscroll-contain xl:pr-2">
+              {pagosMes.map((r) => (
                 <ReciboFila key={r.id} recibo={r} hoy={hoy} />
               ))}
             </div>
@@ -253,6 +290,7 @@ export default function CalendarioPage() {
                 {recibosDia.length === 0 ? <p className="rounded-xl bg-slate-900/[.04] p-4 text-center text-suave">No hay recibos este día.</p> : recibosDia.map((r) => <ReciboDia key={r.id} r={r} hoy={hoy} />)}
               </div>
               {agregarDia}
+              {avisoFecha}
             </>
           )}
         </Ventana>

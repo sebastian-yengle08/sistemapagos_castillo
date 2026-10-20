@@ -39,7 +39,7 @@ src/
   components/  ui.jsx, Layout.jsx, ReciboFila.jsx, RegistrarPagoModal.jsx, AvisoError.jsx
   pages/       PinPage, CalendarioPage, AvisosPage, ReciboFormPage, ReciboDetallePage,
                PrestamosPage, PrestamoFormPage, PrestamoDetallePage, HistorialPage
-supabase/schema.sql   tablas, índices únicos, Realtime y bucket de fotos
+supabase/schema.sql   tablas, índice único del código de recibo, Realtime y bucket de fotos
 ```
 
 ### Modelo de datos
@@ -50,16 +50,16 @@ supabase/schema.sql   tablas, índices únicos, Realtime y bucket de fotos
 
 ## Reglas de negocio
 
-- **Fechas**: desde el 1 de enero de 2026 hasta 24 años después de hoy (el límite se mueve con el calendario), siempre fechas reales y en hora de Lima. La fecha de pago no puede ser futura. Los préstamos también deben terminar dentro de ese límite.
+- **Fechas**: desde el 1 de enero de 2026, siempre fechas reales y en hora de Lima. La fecha límite de un recibo nuevo (Servicio, Proveedor o Impuesto) debe estar dentro del mes actual, desde el día 1 hasta el último día; al editar un recibo antiguo se puede conservar su fecha. Los préstamos y sus cuotas pueden llegar hasta 24 años después de hoy. La fecha de pago no puede ser futura.
 - **Montos**: máximo 10 dígitos enteros y 2 decimales (coincide con `numeric(12,2)` de Supabase). El monto total de un préstamo es la suma de sus cuotas.
 - **Códigos de recibo**: Servicio = 8 a 13 dígitos; Impuesto = 4 dígitos; Proveedor = 10 caracteres alfanuméricos. Los códigos `PRE-...` de las cuotas de préstamo son internos.
-- **Código y empresa (Servicio)**: el código de un servicio es el mismo todos los meses y pertenece a una sola empresa. Al elegir una empresa conocida el código se completa solo; no se puede usar el código de otra empresa ni uno distinto al que la empresa ya tiene.
-- **Recibo repetido**: misma empresa y mismo código no se puede registrar dos veces (en Servicio e Impuesto, cuyo código se repite cada mes, se compara además el mes). Hay índices únicos en la base para respaldarlo.
+- **Código único**: el código de cada recibo (voucher) es único y no se puede registrar dos veces, aunque cambie la empresa, el tipo o el mes. En *Nuevo recibo* los campos empiezan vacíos (solo la fecha sugiere hoy): no se autorrellenan empresas ni códigos de recibos anteriores.
+- **Recibo repetido**: al guardar se avisa si el código ya existe y no se permite guardarlo. Los recibos antiguos que ya tenían códigos repetidos se pueden seguir editando sin cambiar el código.
 - **Nombres** (empresa, entidad, banco): de 3 a 60 caracteres, un solo espacio entre palabras; al comparar no importan mayúsculas, espacios ni tildes. En Proveedor, cualquier número largo escrito en "Razón Social / RUC" se valida como RUC (11 dígitos y dígito verificador).
 - **Tipo de recibo**: no se puede cambiar al editar (cada tipo tiene su formato de código).
-- **Avisos antes de guardar** (se pueden aceptar con "Guardar igual"): fecha límite ya pasada o a más de un año, y monto 3 veces mayor o menor a lo habitual de esa empresa.
-- **Pagos**: el monto pagado es el monto del recibo; en las cuotas de préstamo se puede sumar mora/interés. La mora no puede superar el monto de la cuota. La foto del voucher es obligatoria (hasta 25 MB, al menos 200 px de lado, y no puede ser la misma foto de otro pago). Un pago se **puede corregir** (fecha, medio y foto) pero **no anular**; un recibo pagado no se edita ni se elimina.
-- **Préstamos**: los crea y edita el asistente. Cada cuota se crea como un recibo Pendiente de tipo Préstamo. Si ya hay cuotas pagadas, el monto de cada cuota queda bloqueado, las cuotas pagadas no cambian y las pendientes no pueden vencer antes que ellas. No se puede registrar dos veces el mismo préstamo (mismo banco, cuotas, monto y primera fecha).
+- **Avisos antes de guardar** (se pueden aceptar con "Guardar igual"): fecha límite ya pasada. No se compara el monto con los recibos anteriores.
+- **Pagos**: el monto pagado es el monto del recibo; en las cuotas de préstamo se puede sumar mora/interés. La mora no puede superar el monto de la cuota. La foto del voucher es obligatoria (hasta 25 MB, al menos 200 px de lado) y no puede ser la misma foto de otro pago ni la que ya tiene ese pago al corregirlo. Un pago se **puede corregir** (fecha, medio y foto) pero **no anular**; un recibo pagado no se edita ni se elimina.
+- **Préstamos**: los crea y edita el asistente. La fecha de una cuota pendiente no puede ser anterior a hoy: al crear, la primera cuota vence hoy o después; al editar, si cambias la fecha también debe ser hoy o después (una cuota ya vencida conserva su fecha mientras no la cambies). Cada cuota se crea como un recibo Pendiente de tipo Préstamo. Al editar, el número de cuotas no se puede cambiar; la fecha editable es la de la primera cuota pendiente (si la primera ya se pagó, se muestra la cuota 2 o la que siga) y desde ahí se reprograman las pendientes. Si ya hay cuotas pagadas, el monto de cada cuota queda bloqueado, las cuotas pagadas no cambian y las pendientes no pueden vencer antes que ellas. No se puede registrar dos veces el mismo préstamo (mismo banco, cuotas, monto y primera fecha).
 
 - **Sesión y PIN**: tras 5 PIN incorrectos el teclado se bloquea 30 segundos (el doble en cada nuevo bloqueo) y la sesión se cierra sola tras 15 minutos sin usar la app. El almacén de datos también comprueba el perfil: solo el asistente registra o modifica datos.
 - **Varios dispositivos**: cada fila de recibos y préstamos tiene una `version` (la sube la base sola). Si otro dispositivo cambió la misma fila a la vez, el cambio local no se guarda, se muestra lo último y se avisa. La lectura es por páginas (sin límite de filas) y la hora del historial la pone el servidor.
@@ -77,9 +77,9 @@ Al registrar o corregir un pago, el asistente **debe subir la foto del voucher**
 ## Guion de demo (3 minutos)
 
 **Asistente (PIN 1234)**
-1. *Calendario*: contadores del mes (solo cantidades) y "Próximos pagos". Tocar un día → panel con "Ver detalle".
+1. *Calendario*: contadores del mes (solo cantidades) y **Pagos del mes** con filtro Todos/Pagados/Pendientes/Vencidos. Tocar un día → panel con "Ver detalle".
 2. *Avisos*: Vence hoy, Vence en 3 días, Vencidos.
-3. *Nuevo recibo*: dejar vacío y guardar (mensajes claros); elegir SEDALIB (el código se completa solo) con la misma fecha de un recibo existente → **"Este recibo ya está registrado"**.
+3. *Nuevo recibo*: dejar vacío y guardar (mensajes claros); escribir un código que ya existe → **"Este código ya está registrado"**.
 4. Abrir un recibo pendiente → **Registrar pago** → ya viene el monto, la fecha y el medio usado la última vez → **sube la foto del voucher** → **Confirmar pago** ✔. Ver "Pago realizado", la foto, el recibo en verde y el contador de Pagados +1.
 5. Editar y eliminar un recibo pendiente (con confirmación). Mostrar que un recibo pagado solo permite **Corregir pago**.
 6. *Préstamos*: **Nuevo préstamo** → número de cuotas y monto → el total se calcula solo → vista previa → Guardar. Pagar una cuota con mora/interés.

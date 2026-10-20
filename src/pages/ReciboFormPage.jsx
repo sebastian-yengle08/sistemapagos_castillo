@@ -1,12 +1,12 @@
-// HU-01 Nuevo recibo, HU-04 Editar y HU-05 aviso de recibo repetido (solo asistente).
+// HU-01 Nuevo recibo, HU-04 Editar y HU-05 aviso de código repetido (solo asistente).
 import { useState } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, AlertTriangle } from 'lucide-react'
 import { Boton, Campo, Chip, Tarjeta, Ventana, claseInput } from '../components/ui'
-import { TIPOS, LIMITE_MONTO, NOMBRE_MIN, NOMBRE_MAX, FACTOR_MONTO_ATIPICO } from '../config/constantes'
-import { buscarDuplicado, codigosDeEmpresa, conflictoDeCodigo, crearRecibo, editarRecibo, motivoRechazo, obtenerRecibo, promedioDeEmpresa } from '../data/store'
+import { TIPOS, LIMITE_MONTO, NOMBRE_MIN, NOMBRE_MAX } from '../config/constantes'
+import { buscarDuplicado, crearRecibo, editarRecibo, motivoRechazo, obtenerRecibo } from '../data/store'
 import { useDatos } from '../data/useDatos'
-import { formatoFecha, hoyISO, sumarMeses, FECHA_MINIMA, fechaMaxima, fechaEnRango, textoRangoFechas } from '../utils/fechas'
+import { formatoFecha, hoyISO, FECHA_MINIMA, inicioDeMesActual, finDeMesActual, fechaEnRango, textoRangoFechas } from '../utils/fechas'
 import { formatoSoles, leerMonto } from '../utils/dinero'
 import { soloLetras, soloLetrasNumeros, soloMontoCuota, soloCodigo, soloDigitos, soloAlfanumerico, codigoValido, limpiarNombre, errorDeRuc } from '../utils/validacion'
 
@@ -26,8 +26,10 @@ export default function ReciboFormPage() {
   const { state } = useLocation()
   const origen = state?.origen // pantalla de la que se vino (se conserva al volver al detalle)
   const hoy = hoyISO() // fecha de hoy en Lima
-  const fechaMinima = FECHA_MINIMA // 1 de enero de 2026
-  const fechaMax = fechaMaxima() // hoy + 24 años
+  // Un recibo nuevo solo puede tener fecha dentro del mes actual. Al editar se conserva la
+  // posibilidad de mantener la fecha original de un recibo antiguo.
+  const fechaMinima = editando ? FECHA_MINIMA : inicioDeMesActual()
+  const fechaMax = finDeMesActual() // último día del mes actual
   const [original] = useState(() => (id ? obtenerRecibo(id) : null))
   const { recibos } = useDatos()
   const enVivo = id ? recibos.find((r) => r.id === id) : null // el recibo tal como está AHORA (otro dispositivo pudo cambiarlo)
@@ -42,7 +44,7 @@ export default function ReciboFormPage() {
   const [fecha, setFecha] = useState(() => {
     if (original) return original.fechaLimite
     const deCalendario = consulta.get('fecha')
-    return fechaEnRango(deCalendario) ? deCalendario : hoy
+    return fechaEnRango(deCalendario, fechaMinima, fechaMax) ? deCalendario : hoy
   })
   const [monto, setMonto] = useState(original ? original.monto.toFixed(2) : '')
   const [errores, setErrores] = useState({})
@@ -61,21 +63,13 @@ export default function ReciboFormPage() {
   const limpiarEmpresa = esProveedor ? soloLetrasNumeros : soloLetras
 
   const ayudaCodigo = esProveedor
-    ? 'Exactamente 10 caracteres: letras y números.'
+    ? 'Exactamente 10 caracteres: letras y números. No se puede repetir.'
     : tipo === 'Servicio'
-      ? 'Entre 8 y 13 dígitos, solo números.'
+      ? 'Entre 8 y 13 dígitos, solo números. No se puede repetir.'
       : esImpuesto
-        ? 'Exactamente 4 dígitos, solo números.'
+        ? 'Exactamente 4 dígitos, solo números. No se puede repetir.'
         : 'Elige el tipo de recibo para validar el formato.'
   const placeholderCodigo = esProveedor ? 'Ej.: F001000231' : esImpuesto ? 'Ej.: 0621' : 'Ej.: 20250412'
-
-  // Empresas ya registradas de este tipo (se sugieren al escribir) y su código, que en Servicio es siempre el mismo
-  const empresasConocidas = [...new Set(recibos.filter((r) => !r.prestamoId && r.tipo === tipo).map((r) => r.empresa))].sort()
-  function autocompletarCodigo(nombre) {
-    if (tipo !== 'Servicio' || codigo.trim()) return
-    const c = codigosDeEmpresa(nombre, editando ? id : null)[0]
-    if (c) setCodigo(c)
-  }
 
   // Las cuotas de préstamo y los recibos pagados no se editan; tampoco uno que otro dispositivo ya pagó o eliminó
   const bloqueo = !editando
@@ -117,12 +111,13 @@ export default function ReciboFormPage() {
       else if (esImpuesto) e.codigo = 'El código de Impuesto debe tener exactamente 4 dígitos.'
       else if (esProveedor) e.codigo = 'El código de Proveedor debe tener exactamente 10 letras o números.'
       else e.codigo = 'Escribe un código válido.'
-    } else {
-      const conflicto = conflictoDeCodigo({ tipo, empresa, codigo }, editando ? id : null)
-      if (conflicto) e.codigo = conflicto
     }
     if (!fecha) e.fecha = 'Elige la fecha límite de pago.'
-    else if (!fechaEnRango(fecha)) e.fecha = `La fecha límite debe estar ${textoRangoFechas()}.`
+    else if (!fechaEnRango(fecha, fechaMinima, fechaMax) && !(editando && fecha === original.fechaLimite)) {
+      e.fecha = editando
+        ? `La fecha límite debe estar ${textoRangoFechas(fechaMax)} (último día del mes actual).`
+        : `La fecha límite debe estar entre el ${formatoFecha(fechaMinima)} y el ${formatoFecha(fechaMax)} (mes actual).`
+    }
     const m = leerMonto(monto)
     if (monto.trim() === '') e.monto = 'Escribe el monto total.'
     else if (!(m > 0)) e.monto = 'Escribe un monto válido, mayor a cero.'
@@ -131,16 +126,10 @@ export default function ReciboFormPage() {
     return Object.keys(e).length === 0
   }
 
-  // Advertencias que no impiden guardar, pero conviene confirmar (un año o un cero de más se escapan fácil)
+  // Advertencia que no impide guardar, pero conviene confirmar
   function advertencias() {
     const lista = []
-    const m = leerMonto(monto)
     if (fecha < hoy && !(editando && fecha === original.fechaLimite)) lista.push(`La fecha límite (${formatoFecha(fecha)}) ya pasó: el recibo quedará como Vencido.`)
-    if (fecha > sumarMeses(hoy, 12) && !(editando && fecha === original.fechaLimite)) lista.push(`La fecha límite (${formatoFecha(fecha)}) está a más de un año de hoy. Revisa que el año sea el correcto.`)
-    const habitual = promedioDeEmpresa(empresa, editando ? id : null)
-    if (habitual && !(editando && m === original.monto) && (m > habitual.promedio * FACTOR_MONTO_ATIPICO || m < habitual.promedio / FACTOR_MONTO_ATIPICO)) {
-      lista.push(`El monto (${formatoSoles(m)}) es muy distinto a lo habitual de ${limpiarNombre(empresa)} (promedio de ${formatoSoles(habitual.promedio)} ${habitual.cantidad === 1 ? 'en su único recibo anterior' : `en sus últimos ${habitual.cantidad} recibos`}).`)
-    }
     return lista
   }
 
@@ -159,8 +148,10 @@ export default function ReciboFormPage() {
       fechaLimite: fecha,
       monto: leerMonto(monto),
     }
-    // Un mismo recibo (misma empresa y código) no se registra dos veces.
-    const previo = buscarDuplicado({ tipo, empresa, codigo, fechaLimite: fecha }, editando ? id : null)
+    // El código identifica al voucher: no puede repetirse en otro recibo. Al editar solo se
+    // comprueba si se cambió el código (los recibos antiguos pueden tener códigos repetidos).
+    const codigoCambio = !editando || codigo.trim().toLowerCase() !== original.codigo.trim().toLowerCase()
+    const previo = codigoCambio ? buscarDuplicado({ codigo }, editando ? id : null) : null
     if (previo) return setDuplicado(previo)
     if (!confirmado) {
       const lista = advertencias()
@@ -186,6 +177,7 @@ export default function ReciboFormPage() {
 
       <form
         noValidate
+        autoComplete="off"
         onSubmit={(e) => {
           e.preventDefault()
           guardar()
@@ -212,30 +204,19 @@ export default function ReciboFormPage() {
         <Campo etiqueta={etiquetaEmpresa} id="f-empresa" error={errores.empresa} ayuda={ayudaEmpresa}>
           <input
             id="f-empresa"
-            list="empresas-conocidas"
+            autoComplete="off"
             maxLength={NOMBRE_MAX}
             value={empresa}
-            onChange={(e) => {
-              const v = limpiarEmpresa(e.target.value)
-              setEmpresa(v)
-              if (empresasConocidas.includes(v)) autocompletarCodigo(v) // eligió una empresa de la lista
-            }}
-            onBlur={() => {
-              setEmpresa(limpiarNombre(empresa)) // un solo espacio entre palabras
-              autocompletarCodigo(empresa)
-            }}
+            onChange={(e) => setEmpresa(limpiarEmpresa(e.target.value))}
+            onBlur={() => setEmpresa(limpiarNombre(empresa))} // un solo espacio entre palabras
             placeholder={placeholderEmpresa}
             className={claseInput(errores.empresa)}
           />
-          <datalist id="empresas-conocidas">
-            {empresasConocidas.map((n) => (
-              <option key={n} value={n} />
-            ))}
-          </datalist>
         </Campo>
         <Campo etiqueta="Código del recibo" id="f-codigo" error={errores.codigo} ayuda={ayudaCodigo}>
           <input
             id="f-codigo"
+            autoComplete="off"
             inputMode={tipo === 'Servicio' || esImpuesto ? 'numeric' : 'text'}
             maxLength={esImpuesto ? 4 : tipo === 'Servicio' ? 13 : esProveedor ? 10 : undefined}
             value={codigo}
@@ -245,13 +226,22 @@ export default function ReciboFormPage() {
           />
         </Campo>
         <div className="grid gap-5 sm:grid-cols-2">
-          <Campo etiqueta={etiquetaFecha} id="f-fecha" error={errores.fecha}>
+          <Campo
+            etiqueta={etiquetaFecha}
+            id="f-fecha"
+            error={errores.fecha}
+            ayuda={
+              editando
+                ? `Un recibo nuevo debe vencer este mes; este puede conservar su fecha. Máximo si la cambias: ${formatoFecha(fechaMax)}.`
+                : `Del ${formatoFecha(fechaMinima)} al ${formatoFecha(fechaMax)} (mes actual).`
+            }
+          >
             <input id="f-fecha" type="date" min={fechaMinima} max={fechaMax} value={fecha} onChange={(e) => setFecha(e.target.value)} className={claseInput(errores.fecha)} />
           </Campo>
           <Campo etiqueta="Monto total" id="f-monto" error={errores.monto}>
             <div className="relative">
               <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 font-semibold text-suave">S/</span>
-              <input id="f-monto" inputMode="decimal" value={monto} onChange={(e) => setMonto(soloMontoCuota(e.target.value))} placeholder="0.00" className={`${claseInput(errores.monto)} pl-11`} />
+              <input id="f-monto" autoComplete="new-password" inputMode="decimal" value={monto} onChange={(e) => setMonto(soloMontoCuota(e.target.value))} placeholder="0.00" className={`${claseInput(errores.monto)} pl-11`} />
             </div>
           </Campo>
         </div>
@@ -270,17 +260,17 @@ export default function ReciboFormPage() {
         </div>
       </form>
 
-      {/* HU-05: aviso de recibo repetido */}
-      <Ventana abierta={!!duplicado} onCerrar={() => setDuplicado(null)} titulo="Este recibo ya está registrado">
+      {/* HU-05: aviso de código repetido */}
+      <Ventana abierta={!!duplicado} onCerrar={() => setDuplicado(null)} titulo="Este código ya está registrado">
         {duplicado && (
           <>
             <div className="flex items-center gap-3">
               <span className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-pend-bg text-pend-tx">
                 <AlertTriangle size={26} aria-hidden="true" />
               </span>
-              <h2 className="text-xl font-bold">Este recibo ya está registrado</h2>
+              <h2 className="text-xl font-bold">Este código ya está registrado</h2>
             </div>
-            <p className="mt-3 text-suave">Ya existe un recibo con la misma empresa y el mismo código{duplicado.tipo === 'Servicio' || duplicado.tipo === 'Impuesto' ? ' en ese mes' : ''}:</p>
+            <p className="mt-3 text-suave">Ya existe un recibo con el mismo código:</p>
             <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 rounded-xl bg-slate-900/[.04] p-4">
               <dt className="text-suave">{duplicado.tipo === 'Proveedor' ? 'Razón Social / RUC' : duplicado.tipo === 'Impuesto' ? 'Entidad' : 'Empresa'}</dt>
               <dd className="font-semibold">{duplicado.empresa}</dd>
@@ -300,7 +290,7 @@ export default function ReciboFormPage() {
         )}
       </Ventana>
 
-      {/* Advertencias: fecha pasada o muy lejana, o monto muy distinto a lo habitual */}
+      {/* Advertencia: fecha pasada */}
       <Ventana abierta={avisos.length > 0} onCerrar={() => setAvisos([])} titulo="Revisa estos datos">
         <div className="flex items-center gap-3">
           <span className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-pend-bg text-pend-tx">

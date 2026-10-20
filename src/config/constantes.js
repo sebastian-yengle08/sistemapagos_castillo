@@ -16,7 +16,6 @@ export const NOMBRE_MAX = 60 // Largo máximo
 export const ANIOS_MAXIMOS = 24 // Las fechas pueden llegar hasta 24 años después de hoy (el límite se mueve con el calendario)
 export const MAX_ARCHIVO_MB = 25 // Peso máximo de una foto antes de reducirla
 export const MIN_LADO_FOTO = 200 // Lado menor mínimo (en píxeles) de una foto de voucher
-export const FACTOR_MONTO_ATIPICO = 3 // Se avisa si el monto es 3 veces mayor o menor a lo habitual de la empresa
 export const MAX_INTENTOS_PIN = 5 // Intentos fallidos de PIN antes de bloquear
 export const BLOQUEO_PIN_SEG = 30 // Segundos de bloqueo (se duplica en cada nuevo bloqueo)
 export const INACTIVIDAD_MIN = 15 // Minutos sin usar la app para cerrar la sesión

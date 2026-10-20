@@ -82,10 +82,12 @@ create policy "prototipo vouchers borrar" on storage.objects for delete to anon 
 -- Limpieza: las notificaciones se quitaron de la app.
 drop table if exists public.suscripciones;
 
--- Un mismo recibo (empresa + código + fecha límite) no puede guardarse dos veces,
--- ni siquiera desde dos dispositivos a la vez. (No aplica a las cuotas de préstamo.)
-create unique index if not exists recibos_unico_idx
-  on public.recibos (lower(replace(empresa, ' ', '')), lower(replace(codigo, ' ', '')), fecha_limite)
+-- Respaldo adicional: el código de un recibo es único en todo el sistema (sin importar empresa,
+-- tipo ni mes), ni siquiera desde dos dispositivos a la vez. (No aplica a las cuotas de préstamo.)
+-- Si ya hay códigos repetidos de antes, este índice no se crea: primero hay que corregirlos.
+drop index if exists public.recibos_unico_idx;
+create unique index if not exists recibos_codigo_unico_idx
+  on public.recibos (lower(replace(codigo, ' ', '')))
   where prestamo_id is null;
 
 -- El número de préstamo (PRE-0001, PRE-0002...) no se repite.
