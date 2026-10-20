@@ -18,8 +18,6 @@ export default function RegistrarPagoModal({ recibo, modo = 'registrar', onCerra
   // El último medio usado con esta empresa viene ya seleccionado (si existe)
   const [ultimo] = useState(() => (corrigiendo ? null : ultimoMedioDeEmpresa(recibo.empresa)))
   const esCuota = !!recibo.prestamoId
-  // Al pagar una cuota de préstamo pendiente, la fecha debe ser hoy o posterior.
-  const fechaDesdeHoy = !corrigiendo && esCuota
   // Mora/interés ya guardado: al corregir solo se muestra, no se modifica.
   const interesGuardado = previo ? interesDePago(previo, recibo.monto) : 0
   const [agregarInteres, setAgregarInteres] = useState(false)
@@ -73,8 +71,7 @@ export default function RegistrarPagoModal({ recibo, modo = 'registrar', onCerra
     if (agregarInteres && interesTexto !== '' && !Number.isFinite(interesNum)) e.interes = 'Escribe un monto válido para la mora o interés.'
     else if (agregarInteres && interesNum < 0) e.interes = 'La mora o interés no puede ser negativo.'
     if (!fecha) e.fecha = 'Elige la fecha de pago.'
-    else if (fechaDesdeHoy && fecha < hoy) e.fecha = 'La fecha de pago no puede ser anterior a hoy.'
-    else if (!fechaDesdeHoy && fecha > hoy) e.fecha = 'La fecha de pago no puede ser futura'
+    else if (fecha > hoy) e.fecha = 'La fecha de pago no puede ser posterior a hoy.'
     if (!medio) e.medio = 'Elige cómo se pagó.'
     if (!vista) e.foto = 'Sube la foto del voucher.'
     setErrores(e)
@@ -156,8 +153,7 @@ export default function RegistrarPagoModal({ recibo, modo = 'registrar', onCerra
             <input
               id="pago-fecha"
               type="date"
-              min={fechaDesdeHoy ? hoy : undefined}
-              max={fechaDesdeHoy ? undefined : hoy}
+              max={hoy}
               value={fecha}
               onChange={(e) => setFecha(e.target.value)}
               className={claseInput(errores.fecha)}

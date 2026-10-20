@@ -11,7 +11,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { crearDatosEjemplo } from './seed'
 import { hayNube, leerNube, sincronizarNube, suscribirCambios, borrarVoucher } from './persistencia'
-import { sumarMeses, partes } from '../utils/fechas'
+import { hoyISO, sumarMeses, partes } from '../utils/fechas'
 import { PERFILES, MAX_CUOTAS, LIMITE_CUOTA, LIMITE_PRESTAMO } from '../config/constantes'
 
 const CLAVE = 'pagosCastillo.datos.v1'
@@ -235,6 +235,11 @@ export function eliminarRecibo(id) {
   return true
 }
 
+/** La fecha de pago debe tener formato aaaa-mm-dd y no puede ser posterior a hoy en Lima. */
+function fechaPagoValida(fecha) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(fecha ?? '') && fecha <= hoyISO()
+}
+
 /**
  * Registra el pago de un recibo. datos: { interes, fecha, medio, foto, fotoPath }.
  * En las cuotas de préstamo el monto pagado se calcula como cuota + mora/interés.
@@ -243,6 +248,7 @@ export function eliminarRecibo(id) {
 export function registrarPago(id, datos) {
   const actual = obtenerRecibo(id)
   if (!actual || actual.estado === 'Pagado') return null
+  if (!fechaPagoValida(datos.fecha)) return null
   const interes = actual.prestamoId ? Number(datos.interes ?? 0) : 0
   if (!Number.isFinite(interes) || interes < 0) return null
   const monto = actual.prestamoId ? Math.round((actual.monto + interes) * 100) / 100 : actual.monto
@@ -271,6 +277,7 @@ export function registrarPago(id, datos) {
 export function corregirPago(id, datos) {
   const actual = obtenerRecibo(id)
   if (!actual || actual.estado !== 'Pagado') return null
+  if (!fechaPagoValida(datos.fecha)) return null
   const corregido = {
     ...actual,
     pago: {
