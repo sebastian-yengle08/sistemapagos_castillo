@@ -1,7 +1,7 @@
 // HU-03: ventana para registrar el pago, con los datos ya llenados y la FOTO DEL VOUCHER.
 // Con modo="corregir" sirve para corregir un pago ya registrado (recibo Pagado).
 import { useEffect, useRef, useState } from 'react'
-import { Camera, CheckCircle2, ImagePlus, Loader2, X } from 'lucide-react'
+import { Camera, CheckCircle2, ImagePlus, Loader2 } from 'lucide-react'
 import { Boton, Campo, Chip, Ventana, claseInput } from './ui'
 import { MEDIOS } from '../config/constantes'
 import { corregirPago, registrarPago, ultimoMedioDeEmpresa } from '../data/store'
@@ -9,20 +9,37 @@ import { subirVoucher } from '../data/persistencia'
 import { comprimirImagen } from '../utils/imagen'
 import { formatoFecha, hoyISO } from '../utils/fechas'
 import { formatoSoles, leerMonto } from '../utils/dinero'
+import { soloMonto } from '../utils/validacion'
+import { interesDePago } from '../utils/prestamos'
 
 export default function RegistrarPagoModal({ recibo, modo = 'registrar', onCerrar }) {
   const corrigiendo = modo === 'corregir'
   const previo = corrigiendo ? recibo.pago : null
   // El último medio usado con esta empresa viene ya seleccionado (si existe)
   const [ultimo] = useState(() => (corrigiendo ? null : ultimoMedioDeEmpresa(recibo.empresa)))
-  const [monto, setMonto] = useState((previo?.monto ?? recibo.monto).toFixed(2))
+  const esCuota = !!recibo.prestamoId
+  // Al pagar una cuota de préstamo pendiente, la fecha debe ser hoy o posterior.
+  const fechaDesdeHoy = !corrigiendo && esCuota
+  // Mora/interés ya guardado: al corregir solo se muestra, no se modifica.
+  const interesGuardado = previo ? interesDePago(previo, recibo.monto) : 0
+  const [agregarInteres, setAgregarInteres] = useState(false)
+  const [interes, setInteres] = useState('')
   const [fecha, setFecha] = useState(previo?.fecha ?? hoyISO())
   const [medio, setMedio] = useState(previo?.medio ?? ultimo)
-  const [comprobante, setComprobante] = useState(previo?.comprobante ?? '')
+  
   const [errores, setErrores] = useState({})
   const [listo, setListo] = useState(false)
   const [guardando, setGuardando] = useState(false)
   const hoy = hoyISO() // fecha de hoy en Lima: la fecha de pago no puede ser futura
+
+  // Monto pagado = monto de la cuota/recibo + mora/interés. Siempre es calculado.
+  const montoBase = Number(recibo.monto) || 0
+  const interesTexto = agregarInteres ? interes.trim() : ''
+  const interesNum = interesTexto === '' ? 0 : leerMonto(interesTexto)
+  const interesValido = Number.isFinite(interesNum) && interesNum >= 0
+  const totalPagado = corrigiendo
+    ? Number(previo?.monto) || montoBase
+    : Math.round((montoBase + (interesValido ? interesNum : 0)) * 100) / 100
 
   // Foto del voucher: la ya guardada (al corregir) o una nueva elegida ahora (se sube al confirmar)
   const [fotoGuardada, setFotoGuardada] = useState(previo?.foto ? { url: previo.foto, path: previo.fotoPath ?? null } : null)
@@ -47,18 +64,17 @@ export default function RegistrarPagoModal({ recibo, modo = 'registrar', onCerra
     }
     setProcesando(false)
   }
-  const quitarFoto = () => {
-    setFotoNueva(null)
-    setFotoGuardada(null)
-  }
   const vista = fotoNueva?.vista ?? fotoGuardada?.url ?? null
 
   async function confirmar() {
     const e = {}
-    const m = leerMonto(monto)
-    if (!(m > 0)) e.monto = 'Escribe un monto mayor a cero.'
+    if (!(totalPagado > 0)) e.monto = 'El monto pagado debe ser mayor a cero.'
+    else if (!corrigiendo && totalPagado < montoBase) e.monto = `El monto pagado no puede ser menor al monto ${esCuota ? 'de la cuota' : 'del recibo'} (S/ ${formatoSoles(montoBase)}).`
+    if (agregarInteres && interesTexto !== '' && !Number.isFinite(interesNum)) e.interes = 'Escribe un monto válido para la mora o interés.'
+    else if (agregarInteres && interesNum < 0) e.interes = 'La mora o interés no puede ser negativo.'
     if (!fecha) e.fecha = 'Elige la fecha de pago.'
-    else if (fecha > hoy) e.fecha = 'La fecha de pago no puede ser futura'
+    else if (fechaDesdeHoy && fecha < hoy) e.fecha = 'La fecha de pago no puede ser anterior a hoy.'
+    else if (!fechaDesdeHoy && fecha > hoy) e.fecha = 'La fecha de pago no puede ser futura'
     if (!medio) e.medio = 'Elige cómo se pagó.'
     if (!vista) e.foto = 'Sube la foto del voucher.'
     setErrores(e)
@@ -73,9 +89,13 @@ export default function RegistrarPagoModal({ recibo, modo = 'registrar', onCerra
       setGuardando(false)
       return
     }
-    const datos = { monto: m, fecha, medio, comprobante, foto: foto.url, fotoPath: foto.path }
-    if (corrigiendo) corregirPago(recibo.id, datos)
-    else registrarPago(recibo.id, datos)
+    const datos = { monto: totalPagado, interes: interesValido ? interesNum : 0, fecha, medio, foto: foto.url, fotoPath: foto.path }
+    const resultado = corrigiendo ? corregirPago(recibo.id, datos) : registrarPago(recibo.id, datos)
+    if (!resultado) {
+      setErrores({ monto: 'No se pudo registrar el pago.' })
+      setGuardando(false)
+      return
+    }
     setGuardando(false)
     setListo(true)
   }
@@ -83,19 +103,17 @@ export default function RegistrarPagoModal({ recibo, modo = 'registrar', onCerra
   if (listo) {
     return (
       <Ventana abierta onCerrar={onCerrar} titulo={corrigiendo ? 'Pago corregido' : 'Pago registrado'}>
-        <div className="flex flex-col items-center gap-3 py-6 text-center">
+        <div className="flex flex-col items-center justify-center gap-4 py-6 text-center">
           <span className="grid h-20 w-20 place-items-center rounded-full bg-pag-bg text-pag-tx">
             <CheckCircle2 size={48} aria-hidden="true" />
           </span>
           <h2 className="text-2xl font-bold">{corrigiendo ? 'Pago corregido' : 'Pago registrado'}</h2>
-          <p className="text-suave">
-            {corrigiendo ? (
-              <>Los datos del pago de <b className="text-tinta">{recibo.empresa}</b> se actualizaron.</>
-            ) : (
-              <>El recibo de <b className="text-tinta">{recibo.empresa}</b> ya figura como Pagado.</>
-            )}
-          </p>
-          <Boton variante="primario" grande onClick={onCerrar} className="mt-4">
+          {corrigiendo && (
+            <p className="text-suave">
+              Los datos del pago de <b className="text-tinta">{recibo.empresa}</b> se actualizaron.
+            </p>
+          )}
+          <Boton variante="primario" grande onClick={onCerrar}>
             Listo
           </Boton>
         </div>
@@ -117,16 +135,84 @@ export default function RegistrarPagoModal({ recibo, modo = 'registrar', onCerra
 
       <div className="mt-5 flex flex-col gap-4">
         <div className="grid gap-4 sm:grid-cols-2">
-          <Campo etiqueta="Monto pagado" id="pago-monto" error={errores.monto}>
+          <Campo
+            etiqueta="Monto pagado"
+            id="pago-monto"
+            error={errores.monto}
+            ayuda={corrigiendo ? 'El monto de un pago ya registrado no se puede modificar.' : esCuota ? 'Calculado automáticamente: cuota + mora/interés.' : 'Es el monto fijo del recibo.'}
+          >
             <div className="relative">
               <span className="absolute left-4 top-1/2 -translate-y-1/2 font-semibold text-suave">S/</span>
-              <input id="pago-monto" inputMode="decimal" value={monto} onChange={(e) => setMonto(e.target.value)} className={`${claseInput(errores.monto)} pl-11`} />
+              <input
+                id="pago-monto"
+                inputMode="decimal"
+                value={totalPagado.toFixed(2)}
+                disabled
+                className={`${claseInput(errores.monto)} pl-11 bg-slate-900/[.05] cursor-not-allowed`}
+              />
             </div>
           </Campo>
           <Campo etiqueta="Fecha de pago" id="pago-fecha" error={errores.fecha}>
-            <input id="pago-fecha" type="date" max={hoy} value={fecha} onChange={(e) => setFecha(e.target.value)} className={claseInput(errores.fecha)} />
+            <input
+              id="pago-fecha"
+              type="date"
+              min={fechaDesdeHoy ? hoy : undefined}
+              max={fechaDesdeHoy ? undefined : hoy}
+              value={fecha}
+              onChange={(e) => setFecha(e.target.value)}
+              className={claseInput(errores.fecha)}
+            />
           </Campo>
         </div>
+
+        {esCuota && !corrigiendo && (
+          <div className="rounded-2xl border border-borde p-4">
+            <label className="flex cursor-pointer items-center gap-3 font-semibold">
+              <input
+                type="checkbox"
+                checked={agregarInteres}
+                onChange={(e) => setAgregarInteres(e.target.checked)}
+                className="peer sr-only"
+              />
+              <span
+                className={`relative inline-block h-7 w-12 shrink-0 rounded-full transition peer-focus-visible:ring-2 peer-focus-visible:ring-brand/40 ${agregarInteres ? 'bg-brand' : 'bg-slate-300'}`}
+                aria-hidden="true"
+              >
+                <span className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition ${agregarInteres ? 'left-6' : 'left-1'}`} />
+              </span>
+              Agregar mora/interés
+            </label>
+            {agregarInteres && (
+              <div className="mt-4">
+                <Campo
+                  etiqueta="Mora o interés (opcional)"
+                  id="pago-interes"
+                  error={errores.interes}
+                  ayuda="Se suma al monto de la cuota."
+                >
+                  <div className="relative">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 font-semibold text-suave">S/</span>
+                    <input
+                      id="pago-interes"
+                      inputMode="decimal"
+                      value={interes}
+                      onChange={(e) => setInteres(soloMonto(e.target.value))}
+                      placeholder="0.00"
+                      className={`${claseInput(errores.interes)} pl-11`}
+                    />
+                  </div>
+                </Campo>
+              </div>
+            )}
+          </div>
+        )}
+
+        {corrigiendo && esCuota && interesGuardado > 0 && (
+          <div className="flex items-center justify-between gap-3 rounded-xl bg-slate-900/[.04] px-4 py-3">
+            <span className="text-suave">Mora o interés registrado</span>
+            <span className="font-semibold">{formatoSoles(interesGuardado)}</span>
+          </div>
+        )}
 
         <fieldset>
           <legend className="mb-1.5 text-base font-semibold">Medio de pago</legend>
@@ -154,14 +240,9 @@ export default function RegistrarPagoModal({ recibo, modo = 'registrar', onCerra
           {vista ? (
             <div className="flex items-center gap-3 rounded-2xl border border-borde bg-slate-900/[.03] p-3">
               <img src={vista} alt="Foto del voucher" className="h-24 w-24 shrink-0 rounded-xl border border-borde object-cover" />
-              <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row">
-                <Boton onClick={() => galeria.current?.click()} className="!min-h-11 flex-1">
-                  Cambiar foto
-                </Boton>
-                <Boton onClick={quitarFoto} className="!min-h-11 flex-1 !text-venc-tx">
-                  <X size={16} aria-hidden="true" /> Quitar
-                </Boton>
-              </div>
+              <Boton onClick={() => galeria.current?.click()} className="flex-1 !min-h-11">
+                Corregir foto
+              </Boton>
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-2">
@@ -179,10 +260,6 @@ export default function RegistrarPagoModal({ recibo, modo = 'registrar', onCerra
             </p>
           )}
         </div>
-
-        <Campo etiqueta="Número de comprobante (opcional)" id="pago-comp">
-          <input id="pago-comp" value={comprobante} onChange={(e) => setComprobante(e.target.value)} className={claseInput(false)} />
-        </Campo>
 
         <Boton variante="primario" grande onClick={confirmar} disabled={guardando || procesando}>
           {guardando ? (

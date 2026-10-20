@@ -8,7 +8,6 @@ import { useAuth } from '../context/AuthContext'
 import { useDatos } from '../data/useDatos'
 import { agruparAvisos } from '../utils/avisos'
 import { hoyISO } from '../utils/fechas'
-import ActivarAvisos from './ActivarAvisos'
 
 const MENU = {
   asistente: [
@@ -97,7 +96,6 @@ export default function Layout() {
               )}
             </nav>
             <div className="flex items-center justify-self-end gap-2">
-              <Campana avisos={avisos} />
               <span className="px-2 text-base font-semibold text-white/90">{nombre}</span>
               <button type="button" onClick={bloquear} className="inline-flex min-h-11 items-center gap-2 rounded-lg px-3 font-semibold text-white/90 hover:bg-white/10 hover:text-white">
                 <LogOut size={18} aria-hidden="true" /> Cerrar sesión
@@ -119,8 +117,6 @@ export default function Layout() {
           </div>
         </header>
       )}
-
-      <ActivarAvisos />
 
       <main key={pathname} className="mx-auto max-w-[1280px] px-4 pb-28 pt-5 lg:px-8 lg:pb-10 lg:pt-8">
         <Outlet />

@@ -21,7 +21,7 @@ create table if not exists public.recibos (
   monto         numeric(12,2) not null,
   igv           numeric(12,2),
   estado        text not null check (estado in ('Pendiente','Pagado')),
-  pago          jsonb,                      -- {monto, fecha, medio, comprobante}
+  pago          jsonb,                      -- {monto, interes, fecha, medio, foto, fotoPath}
   prestamo_id   text references public.prestamos(id) on delete cascade,
   cuota         integer,
   creado_en     timestamptz not null default now()
@@ -51,18 +51,6 @@ drop policy if exists "prototipo historial" on public.historial;
 create policy "prototipo prestamos" on public.prestamos for all to anon using (true) with check (true);
 create policy "prototipo recibos"   on public.recibos   for all to anon using (true) with check (true);
 create policy "prototipo historial" on public.historial for all to anon using (true) with check (true);
-
--- Dispositivos que activaron las notificaciones (una fila por navegador/celular)
-create table if not exists public.suscripciones (
-  endpoint   text primary key,
-  p256dh     text not null,
-  auth       text not null,
-  perfil     text not null,
-  creado_en  timestamptz not null default now()
-);
-alter table public.suscripciones enable row level security;
-drop policy if exists "prototipo suscripciones" on public.suscripciones;
-create policy "prototipo suscripciones" on public.suscripciones for all to anon using (true) with check (true);
 
 -- Tiempo real: los cambios se ven al instante en todos los dispositivos.
 -- (Si no se ejecuta, la app igual se actualiza sola cada 10 segundos.)

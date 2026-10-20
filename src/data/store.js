@@ -1,4 +1,4 @@
-// ─────────────────────────────────────────────────────────────────────────────
+﻿// ─────────────────────────────────────────────────────────────────────────────
 // Capa de datos de Pagos Castillo.
 //
 // Las pantallas SOLO hablan con este archivo. Los datos viven en memoria (rápido
@@ -12,7 +12,7 @@
 import { crearDatosEjemplo } from './seed'
 import { hayNube, leerNube, sincronizarNube, suscribirCambios, borrarVoucher } from './persistencia'
 import { sumarMeses, partes } from '../utils/fechas'
-import { PERFILES } from '../config/constantes'
+import { PERFILES, MAX_CUOTAS, LIMITE_CUOTA, LIMITE_PRESTAMO } from '../config/constantes'
 
 const CLAVE = 'pagosCastillo.datos.v1'
 
@@ -162,11 +162,11 @@ export function obtenerPrestamo(id) {
   return estado.prestamos.find((p) => p.id === id) ?? null
 }
 
-/** Busca un recibo con la misma empresa y código (sin distinguir mayúsculas ni espacios). */
-export function buscarDuplicado(empresa, codigo, ignorarId = null) {
+/** Busca un recibo con el mismo código (sin distinguir mayúsculas ni espacios). */
+export function buscarDuplicado(codigo, ignorarId = null) {
   return (
     estado.recibos.find(
-      (r) => r.id !== ignorarId && normalizar(r.empresa) === normalizar(empresa) && normalizar(r.codigo) === normalizar(codigo),
+      (r) => r.id !== ignorarId && normalizar(r.codigo) === normalizar(codigo),
     ) ?? null
   )
 }
@@ -235,14 +235,29 @@ export function eliminarRecibo(id) {
   return true
 }
 
-/** Registra el pago de un recibo. datos: { monto, fecha, medio, comprobante } */
+/**
+ * Registra el pago de un recibo. datos: { interes, fecha, medio, foto, fotoPath }.
+ * En las cuotas de préstamo el monto pagado se calcula como cuota + mora/interés.
+ * Nunca puede ser menor al monto del recibo o de la cuota.
+ */
 export function registrarPago(id, datos) {
   const actual = obtenerRecibo(id)
   if (!actual || actual.estado === 'Pagado') return null
+  const interes = actual.prestamoId ? Number(datos.interes ?? 0) : 0
+  if (!Number.isFinite(interes) || interes < 0) return null
+  const monto = actual.prestamoId ? Math.round((actual.monto + interes) * 100) / 100 : actual.monto
+  if (!(monto > 0) || monto < actual.monto) return null
   const pagado = {
     ...actual,
     estado: 'Pagado',
-    pago: { monto: datos.monto, fecha: datos.fecha, medio: datos.medio, comprobante: (datos.comprobante ?? '').trim(), foto: datos.foto ?? null, fotoPath: datos.fotoPath ?? null },
+    pago: {
+      monto,
+      interes,
+      fecha: datos.fecha,
+      medio: datos.medio,
+      foto: datos.foto ?? null,
+      fotoPath: datos.fotoPath ?? null,
+    },
   }
   publicar({
     ...estado,
@@ -252,13 +267,20 @@ export function registrarPago(id, datos) {
   return pagado
 }
 
-/** Corrige los datos de un pago ya registrado. datos: { monto, fecha, medio, comprobante } */
+/** Corrige la fecha, el medio y la foto de un pago ya registrado. El monto no se modifica. */
 export function corregirPago(id, datos) {
   const actual = obtenerRecibo(id)
   if (!actual || actual.estado !== 'Pagado') return null
   const corregido = {
     ...actual,
-    pago: { monto: datos.monto, fecha: datos.fecha, medio: datos.medio, comprobante: (datos.comprobante ?? '').trim(), foto: datos.foto ?? null, fotoPath: datos.fotoPath ?? null },
+    pago: {
+      ...actual.pago,
+      monto: actual.pago.monto,
+      fecha: datos.fecha,
+      medio: datos.medio,
+      foto: datos.foto ?? null,
+      fotoPath: datos.fotoPath ?? null,
+    },
   }
   publicar({
     ...estado,
@@ -298,6 +320,9 @@ export function calcularCuotas({ numCuotas, montoCuota, primeraFecha }) {
 /** datos: { entidad, montoTotal, numCuotas, montoCuota, primeraFecha } */
 export function crearPrestamo(datos) {
   if (actor !== 'asistente') return null // los préstamos los gestiona el asistente
+  if (!Number.isInteger(datos.numCuotas) || datos.numCuotas < 1 || datos.numCuotas > MAX_CUOTAS) return null
+  if (!(datos.montoCuota > 0) || datos.montoCuota > LIMITE_CUOTA) return null
+  if (!(datos.montoTotal > 0) || datos.montoTotal > LIMITE_PRESTAMO) return null
   const correlativo = estado.prestamos.length + 1
   const codigoBase = `PRE-${String(correlativo).padStart(4, '0')}`
   const prestamo = {
@@ -359,6 +384,9 @@ export function planEdicionPrestamo(id, { numCuotas, montoCuota, primeraFecha })
 export function editarPrestamo(id, datos) {
   const actual = obtenerPrestamo(id)
   if (!actual || actor !== 'asistente') return null
+  if (!Number.isInteger(datos.numCuotas) || datos.numCuotas < 1 || datos.numCuotas > MAX_CUOTAS) return null
+  if (!(datos.montoCuota > 0) || datos.montoCuota > LIMITE_CUOTA) return null
+  if (!(datos.montoTotal > 0) || datos.montoTotal > LIMITE_PRESTAMO) return null
   const { cuotas, minimoCuotas } = planEdicionPrestamo(id, datos)
   if (datos.numCuotas < minimoCuotas) return null
   const entidad = datos.entidad.trim()
@@ -401,10 +429,17 @@ export function resumenPrestamo(prestamo, recibos = estado.recibos) {
 /** Registra "Ingresó al sistema" con el perfil que entró. */
 export function registrarIngreso(perfil) {
   definirActor(perfil)
-  publicar({ ...estado, historial: anotar(estado.historial, 'ingreso', 'Ingresó al sistema', perfil) })
 }
 
 /** Solo para pruebas: vuelve a cargar los datos de ejemplo (y reinicia el historial). */
 export function reiniciarDatos() {
   publicar(crearDatosEjemplo())
+}
+
+/** Borra todo el historial de acciones sin tocar recibos ni préstamos. */
+export function limpiarHistorial() {
+  publicar({
+    ...estado,
+    historial: [],
+  })
 }

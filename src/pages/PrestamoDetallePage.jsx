@@ -8,6 +8,7 @@ import { Insignia, Tarjeta, Vacio } from '../components/ui'
 import { estadoVisible } from '../utils/estado'
 import { formatoFecha, hoyISO } from '../utils/fechas'
 import { formatoSoles } from '../utils/dinero'
+import { interesCuota, totalPagoCuota } from '../utils/prestamos'
 
 export default function PrestamoDetallePage() {
   const { id } = useParams()
@@ -65,32 +66,42 @@ export default function PrestamoDetallePage() {
 
       <h2 className="mb-2 mt-6 text-xl font-bold">Cuotas</h2>
       <Tarjeta className="overflow-hidden">
-        <table className="w-full text-left">
-          <thead className="bg-brand/5 text-sm text-suave">
-            <tr>
-              <th className="px-4 py-3 font-semibold">Cuota</th>
-              <th className="px-4 py-3 font-semibold">Fecha</th>
-              <th className="px-4 py-3 text-right font-semibold">Monto</th>
-              <th className="px-4 py-3 text-right font-semibold">Estado</th>
-            </tr>
-          </thead>
-          <tbody>
-            {s.cuotas.map((c) => (
-              <tr key={c.id} className="border-t border-borde">
-                <td className="px-4 py-3 font-semibold">
-                  <Link to={`/recibos/${c.id}`} state={{ origen: `/prestamos/${p.id}` }} className="text-brand underline-offset-2 hover:underline">
-                    {c.cuota} de {s.total}
-                  </Link>
-                </td>
-                <td className="px-4 py-3">{formatoFecha(c.fechaLimite)}</td>
-                <td className="px-4 py-3 text-right font-semibold">{formatoSoles(c.monto)}</td>
-                <td className="px-4 py-3 text-right">
-                  <Insignia estado={estadoVisible(c, hoy)} />
-                </td>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[640px] text-left">
+            <thead className="bg-brand/5 text-sm text-suave">
+              <tr>
+                <th className="px-4 py-3 font-semibold">Cuota</th>
+                <th className="px-4 py-3 font-semibold">Fecha</th>
+                <th className="px-4 py-3 text-right font-semibold">Monto</th>
+                <th className="px-4 py-3 text-right font-semibold">Interés</th>
+                <th className="px-4 py-3 text-right font-semibold">Total pago</th>
+                <th className="px-4 py-3 text-right font-semibold">Estado</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {s.cuotas.map((c) => {
+                const interes = interesCuota(c)
+                const total = totalPagoCuota(c)
+                return (
+                  <tr key={c.id} className="border-t border-borde">
+                    <td className="px-4 py-3 font-semibold">
+                      <Link to={`/recibos/${c.id}`} state={{ origen: `/prestamos/${p.id}` }} className="text-brand underline-offset-2 hover:underline">
+                        {c.cuota} de {s.total}
+                      </Link>
+                    </td>
+                    <td className="px-4 py-3">{formatoFecha(c.fechaLimite)}</td>
+                    <td className="px-4 py-3 text-right font-semibold">{formatoSoles(c.monto)}</td>
+                    <td className={`px-4 py-3 text-right ${interes > 0 ? 'font-semibold text-pend-tx' : ''}`}>{formatoSoles(interes)}</td>
+                    <td className="px-4 py-3 text-right font-bold">{formatoSoles(total)}</td>
+                    <td className="px-4 py-3 text-right">
+                      <Insignia estado={estadoVisible(c, hoy)} />
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
       </Tarjeta>
     </div>
   )

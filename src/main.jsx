@@ -5,7 +5,6 @@ import './index.css'
 import App from './App.jsx'
 import { AuthProvider } from './context/AuthContext.jsx'
 import { iniciarDatos, iniciarSincronizacion, refrescar } from './data/store'
-import { registrarServiceWorker } from './utils/notificaciones'
 import { buscarVersionNueva } from './utils/actualizacion'
 
 const raiz = createRoot(document.getElementById('root'))
@@ -42,5 +41,7 @@ window.addEventListener('pageshow', alVolver)
 window.addEventListener('online', alVolver)
 buscarVersionNueva()
 
-// Service worker: necesario para recibir notificaciones
-registrarServiceWorker()
+// Se quitaron las notificaciones: se desregistran los service workers que hayan quedado instalados.
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.getRegistrations().then((regs) => regs.forEach((r) => r.unregister())).catch(() => {})
+}

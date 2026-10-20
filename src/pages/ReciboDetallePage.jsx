@@ -1,18 +1,19 @@
 // Detalle de un recibo.
-// Asistente: Pendiente/Vencido → registrar pago, editar, eliminar. Pagado → corregir o anular el pago.
+// Asistente: Pendiente/Vencido → registrar pago, editar, eliminar. Pagado → corregir el pago.
 // Cuotas de préstamo: no se editan ni eliminan. Gerente: solo consulta.
 import { useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, CheckCircle2, Pencil, Trash2, Wallet, FileX, Banknote, Undo2, ZoomIn } from 'lucide-react'
+import { ArrowLeft, CheckCircle2, Pencil, Trash2, Wallet, FileX, Banknote, ZoomIn } from 'lucide-react'
 import { useDatos } from '../data/useDatos'
 import { useAuth } from '../context/AuthContext'
-import { anularPago, eliminarRecibo } from '../data/store'
+import { eliminarRecibo } from '../data/store'
 import { Boton, Insignia, Tarjeta, Ventana, Vacio } from '../components/ui'
 import RegistrarPagoModal from '../components/RegistrarPagoModal'
 import { iconoDeTipo } from '../components/ReciboFila'
 import { estadoVisible } from '../utils/estado'
 import { diasEntre, formatoFecha, hoyISO } from '../utils/fechas'
 import { formatoSoles } from '../utils/dinero'
+import { interesCuota } from '../utils/prestamos'
 
 function Dato({ etiqueta, children }) {
   return (
@@ -32,7 +33,6 @@ export default function ReciboDetallePage() {
   const [pagando, setPagando] = useState(false)
   const [corrigiendo, setCorrigiendo] = useState(false)
   const [eliminando, setEliminando] = useState(false)
-  const [anulando, setAnulando] = useState(false)
   const [verFoto, setVerFoto] = useState(false) // foto del voucher en grande
 
   // Pantalla de la que se vino (calendario, avisos, préstamo, historial); por defecto el calendario
@@ -60,6 +60,7 @@ export default function ReciboDetallePage() {
   const esAsistente = perfil === 'asistente'
   const esCuota = !!r.prestamoId
   const pagado = r.estado === 'Pagado'
+  const interes = esCuota ? interesCuota(r) : 0
   const dias = diasEntre(hoy, r.fechaLimite)
   const nota = estado === 'Vencido' ? `Venció hace ${-dias} ${-dias === 1 ? 'día' : 'días'}` : estado === 'Pendiente' ? (dias === 0 ? 'Vence hoy' : `Vence en ${dias} ${dias === 1 ? 'día' : 'días'}`) : null
 
@@ -93,9 +94,8 @@ export default function ReciboDetallePage() {
         {nota && <p className={`mt-1 font-semibold ${estado === 'Vencido' ? 'text-venc-tx' : 'text-pend-tx'}`}>{nota}</p>}
 
         <dl className="mt-4">
-          <Dato etiqueta="Fecha límite">{formatoFecha(r.fechaLimite)}</Dato>
+          <Dato etiqueta={r.tipo === 'Impuesto' ? 'Período tributario' : 'Fecha límite'}>{formatoFecha(r.fechaLimite)}</Dato>
           <Dato etiqueta="Tipo">{r.tipo}</Dato>
-          {r.igv != null && <Dato etiqueta="IGV">{formatoSoles(r.igv)}</Dato>}
           {esCuota && <Dato etiqueta="Cuota de préstamo">{r.cuota}</Dato>}
         </dl>
       </Tarjeta>
@@ -107,10 +107,11 @@ export default function ReciboDetallePage() {
             <CheckCircle2 size={22} aria-hidden="true" /> Pago realizado
           </h2>
           <dl className="mt-2">
+            {esCuota && <Dato etiqueta="Monto de la cuota">{formatoSoles(r.monto)}</Dato>}
+            {esCuota && interes > 0 && <Dato etiqueta="Mora o interés">{formatoSoles(interes)}</Dato>}
             <Dato etiqueta="Monto pagado">{formatoSoles(r.pago.monto)}</Dato>
             <Dato etiqueta="Medio de pago">{r.pago.medio}</Dato>
             <Dato etiqueta="Fecha de pago">{formatoFecha(r.pago.fecha)}</Dato>
-            {r.pago.comprobante && <Dato etiqueta="Comprobante">{r.pago.comprobante}</Dato>}
           </dl>
           {/* Foto del voucher: se ve igual para asistente y gerente */}
           <div className="mt-3">
@@ -139,14 +140,9 @@ export default function ReciboDetallePage() {
           )}
 
           {pagado && (
-            <div className="grid grid-cols-2 gap-3">
-              <Boton onClick={() => setCorrigiendo(true)}>
-                <Pencil size={18} aria-hidden="true" /> Corregir pago
-              </Boton>
-              <Boton onClick={() => setAnulando(true)} className="!text-venc-tx">
-                <Undo2 size={18} aria-hidden="true" /> Anular pago
-              </Boton>
-            </div>
+            <Boton onClick={() => setCorrigiendo(true)}>
+              <Pencil size={18} aria-hidden="true" /> Corregir pago
+            </Boton>
           )}
 
           {!pagado && !esCuota && (
@@ -162,10 +158,10 @@ export default function ReciboDetallePage() {
 
           {esCuota && (
             <p className="flex items-center gap-2 rounded-xl bg-slate-900/[.05] p-3 text-sm text-suave">
-              <Banknote size={18} aria-hidden="true" /> Esta cuota viene de un préstamo: solo se puede pagar, corregir o anular su pago.
+              <Banknote size={18} aria-hidden="true" /> Esta cuota viene de un préstamo: solo se puede pagar o corregir su pago.
             </p>
           )}
-          {pagado && !esCuota && <p className="text-sm text-suave">Para eliminar este recibo, primero anula el pago.</p>}
+          {pagado && !esCuota && <p className="text-sm text-suave">Un recibo pagado no se puede eliminar.</p>}
         </div>
       )}
 
@@ -218,23 +214,6 @@ export default function ReciboDetallePage() {
         </div>
       </Ventana>
 
-      <Ventana abierta={anulando} onCerrar={() => setAnulando(false)} titulo="Anular pago">
-        <h2 className="text-xl font-bold">¿Anular este pago?</h2>
-        <p className="mt-2 text-suave">El recibo volverá a Pendiente. Luego se puede registrar el pago de nuevo.</p>
-        <div className="mt-5 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-          <Boton onClick={() => setAnulando(false)}>Cancelar</Boton>
-          <Boton
-            variante="peligro"
-            onClick={() => {
-              anularPago(r.id)
-              setAnulando(false)
-              recargarDetalle('Pago anulado')
-            }}
-          >
-            Sí, anular pago
-          </Boton>
-        </div>
-      </Ventana>
     </div>
   )
 }

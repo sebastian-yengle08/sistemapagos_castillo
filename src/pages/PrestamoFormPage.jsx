@@ -5,8 +5,10 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, Landmark } from 'lucide-react'
 import { Boton, Campo, Insignia, Tarjeta, Vacio, claseInput } from '../components/ui'
 import { calcularCuotas, crearPrestamo, editarPrestamo, obtenerPrestamo, planEdicionPrestamo } from '../data/store'
+import { LIMITE_PRESTAMO, LIMITE_CUOTA, MAX_CUOTAS } from '../config/constantes'
 import { formatoFecha, hoyISO } from '../utils/fechas'
 import { formatoSoles, leerMonto } from '../utils/dinero'
+import { soloLetras, soloMontoCuota } from '../utils/validacion'
 
 export default function PrestamoFormPage() {
   const { id } = useParams()
@@ -23,7 +25,7 @@ export default function PrestamoFormPage() {
 
   const nCuotas = Number(num)
   const mCuota = leerMonto(cuota)
-  const cuotasOk = Number.isInteger(nCuotas) && nCuotas >= 1 && nCuotas <= 120 && mCuota > 0 && !!primera
+  const cuotasOk = Number.isInteger(nCuotas) && nCuotas >= 1 && nCuotas <= MAX_CUOTAS && mCuota > 0 && mCuota <= LIMITE_CUOTA && !!primera
 
   // Vista previa de cuotas (al editar, las ya pagadas se muestran como Pagado y no cambian)
   const plan = useMemo(() => {
@@ -49,12 +51,14 @@ export default function PrestamoFormPage() {
     e.preventDefault()
     const er = {}
     if (!entidad.trim()) er.entidad = 'Escribe el banco o la entidad.'
-    if (!(Number.isInteger(nCuotas) && nCuotas >= 1 && nCuotas <= 120)) er.num = 'Escribe cuántas cuotas son (de 1 a 120).'
+    if (!(Number.isInteger(nCuotas) && nCuotas >= 1 && nCuotas <= MAX_CUOTAS)) er.num = `Escribe cuántas cuotas son (de 1 a ${MAX_CUOTAS}).`
     else if (editando && cuotasOk && nCuotas < plan.minimoCuotas) er.num = `Ya hay cuotas pagadas hasta la ${plan.minimoCuotas}: no puede haber menos.`
     if (!(mCuota > 0)) er.cuota = 'Escribe el monto de cada cuota.'
+    else if (mCuota > LIMITE_CUOTA) er.cuota = 'El monto de cada cuota no puede superar los 10 dígitos.'
     if (!primera) er.primera = 'Elige la fecha de la primera cuota.'
     // Al editar, la fecha original se puede conservar; una fecha nueva no puede ser anterior a hoy
     else if (primera < hoy && !(editando && primera === original.primeraFecha)) er.primera = 'La fecha de la primera cuota no puede ser anterior a hoy'
+    if (montoTotal > LIMITE_PRESTAMO) er.cuota = `El monto total del préstamo no puede superar S/ ${formatoSoles(LIMITE_PRESTAMO)}.`
     setErrores(er)
     if (Object.keys(er).length) return
     const datos = { entidad, montoTotal, numCuotas: nCuotas, montoCuota: mCuota, primeraFecha: primera }
@@ -69,21 +73,31 @@ export default function PrestamoFormPage() {
         <ArrowLeft size={20} aria-hidden="true" /> Volver
       </Link>
       <h1 className="text-2xl font-bold sm:text-3xl">{editando ? 'Editar préstamo' : 'Nuevo préstamo'}</h1>
-      <p className="mt-1 text-suave">Escribe la cuota tal como la cobra el banco: el sistema no calcula intereses, solo suma las cuotas para obtener el monto total.</p>
+      <p className="mt-1 text-suave">Escribe la cuota tal como la cobra el banco: el sistema no calcula intereses, solo suma las cuotas para obtener el monto total. La mora o interés se agrega al registrar cada pago.</p>
       {editando && <p className="mt-2 rounded-xl bg-pend-bg px-4 py-2 text-sm font-semibold text-pend-tx">Las cuotas ya pagadas no cambian. Los cambios se aplican a las cuotas que faltan pagar.</p>}
 
       <form noValidate onSubmit={guardar} className="mt-5 flex flex-col gap-5 rounded-2xl border border-borde bg-sup p-4 sm:p-6">
         <Campo etiqueta="Banco o entidad" id="p-ent" error={errores.entidad}>
-          <input id="p-ent" value={entidad} onChange={(e) => setEntidad(e.target.value)} placeholder="Ej.: Banco de Crédito" className={claseInput(errores.entidad)} />
+          <input id="p-ent" value={entidad} onChange={(e) => setEntidad(soloLetras(e.target.value))} placeholder="Ej.: Banco de Crédito" className={claseInput(errores.entidad)} />
         </Campo>
         <div className="grid gap-5 sm:grid-cols-2">
-          <Campo etiqueta="Número de cuotas" id="p-num" error={errores.num}>
-            <input id="p-num" inputMode="numeric" value={num} onChange={(e) => setNum(e.target.value.replace(/\D/g, ''))} placeholder="Ej.: 12" className={claseInput(errores.num)} />
+          <Campo etiqueta="Número de cuotas" id="p-num" error={errores.num} ayuda={`De 1 a ${MAX_CUOTAS} cuotas.`}>
+            <input
+              id="p-num"
+              inputMode="numeric"
+              value={num}
+              onChange={(e) => {
+                const digitos = e.target.value.replace(/\D/g, '')
+                setNum(digitos === '' ? '' : String(Math.min(Number(digitos), MAX_CUOTAS)))
+              }}
+              placeholder="Ej.: 12"
+              className={claseInput(errores.num)}
+            />
           </Campo>
-          <Campo etiqueta="Monto de cada cuota" id="p-cuo" error={errores.cuota}>
+          <Campo etiqueta="Monto de cada cuota" id="p-cuo" error={errores.cuota} ayuda="Máximo 10 dígitos.">
             <div className="relative">
               <span className="absolute left-4 top-1/2 -translate-y-1/2 font-semibold text-suave">S/</span>
-              <input id="p-cuo" inputMode="decimal" value={cuota} onChange={(e) => setCuota(e.target.value)} placeholder="0.00" className={`${claseInput(errores.cuota)} pl-11`} />
+              <input id="p-cuo" inputMode="decimal" value={cuota} onChange={(e) => setCuota(soloMontoCuota(e.target.value))} placeholder="0.00" className={`${claseInput(errores.cuota)} pl-11`} />
             </div>
           </Campo>
           <Campo etiqueta="Fecha de la primera cuota" id="p-fec" error={errores.primera}>

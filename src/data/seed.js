@@ -1,4 +1,4 @@
-// Datos de ejemplo, calculados RELATIVOS A LA FECHA ACTUAL (hoy en Lima) para que
+﻿// Datos de ejemplo, calculados RELATIVOS A LA FECHA ACTUAL (hoy en Lima) para que
 // la demostración siempre se vea viva: hay recibos que vencen hoy, en 3 días,
 // vencidos, pagados con varios medios, etc.
 import { hoyISO, sumarDias, sumarMeses, partes } from '../utils/fechas'
@@ -29,7 +29,6 @@ function recibo(hoy, o) {
           monto: o.monto,
           fecha: sumarDias(fechaLimite, -(o.pago.antes ?? 1)),
           medio: o.pago.medio,
-          comprobante: o.pago.comprobante ?? '',
         }
       : null,
     prestamoId: null,
@@ -44,23 +43,23 @@ export function crearDatosEjemplo() {
 
   const recibos = [
     // ── Pagados (mes pasado y actual) ──
-    recibo(hoy, { tipo: 'Servicio', empresa: 'Hidrandina', codigo: 'HID-2025-0412', monto: 312.4, dias: -35, pago: { medio: 'Visa', comprobante: 'OP-88213' } }),
-    recibo(hoy, { tipo: 'Servicio', empresa: 'Telefónica', codigo: 'TEL-77841', monto: 189.9, dias: -28, pago: { medio: 'Mastercard' } }),
-    recibo(hoy, { tipo: 'Servicio', empresa: 'SEDALIB', codigo: 'SED-55120', monto: 96.5, dias: -33, pago: { medio: 'Efectivo' } }),
-    recibo(hoy, { tipo: 'Impuesto', empresa: 'SUNAT', codigo: 'PDT-0621', monto: 1840, dias: -20, pago: { medio: 'Transferencia', comprobante: 'TR-004519' } }),
-    recibo(hoy, { tipo: 'Proveedor', empresa: 'Distribuidora San Jorge', codigo: 'F001-0231', monto: 2450, dias: -12, pago: { medio: 'Transferencia', comprobante: 'TR-004702' } }),
-    recibo(hoy, { tipo: 'Impuesto', empresa: 'Municipalidad de Trujillo', codigo: 'ARB-2025-03', monto: 275, dias: -9, pago: { medio: 'Efectivo' } }),
+    recibo(hoy, { tipo: 'Servicio', empresa: 'Hidrandina', codigo: '20250412', monto: 312.4, dias: -35, pago: { medio: 'Visa' } }),
+    recibo(hoy, { tipo: 'Servicio', empresa: 'Telefónica', codigo: '77841', monto: 189.9, dias: -28, pago: { medio: 'Mastercard' } }),
+    recibo(hoy, { tipo: 'Servicio', empresa: 'SEDALIB', codigo: '55120', monto: 96.5, dias: -33, pago: { medio: 'Efectivo' } }),
+    recibo(hoy, { tipo: 'Impuesto', empresa: 'SUNAT', codigo: '0621', monto: 1840, dias: -20, pago: { medio: 'Transferencia' } }),
+    recibo(hoy, { tipo: 'Proveedor', empresa: 'Distribuidora San Jorge', codigo: 'F001-0231', monto: 2450, dias: -12, pago: { medio: 'Transferencia' } }),
+    recibo(hoy, { tipo: 'Impuesto', empresa: 'Municipalidad de Trujillo', codigo: '202503', monto: 275, dias: -9, pago: { medio: 'Efectivo' } }),
     // ── Vencen hoy y en los próximos 3 días ──
-    recibo(hoy, { tipo: 'Servicio', empresa: 'SEDALIB', codigo: 'SED-55987', monto: 108.3, dias: 0 }),
-    recibo(hoy, { tipo: 'Servicio', empresa: 'Telefónica', codigo: 'TEL-78502', monto: 189.9, dias: 2 }),
-    recibo(hoy, { tipo: 'Servicio', empresa: 'Hidrandina', codigo: 'HID-2025-0518', monto: 342.1, dias: 3 }),
+    recibo(hoy, { tipo: 'Servicio', empresa: 'SEDALIB', codigo: '55987', monto: 108.3, dias: 0 }),
+    recibo(hoy, { tipo: 'Servicio', empresa: 'Telefónica', codigo: '78502', monto: 189.9, dias: 2 }),
+    recibo(hoy, { tipo: 'Servicio', empresa: 'Hidrandina', codigo: '20250518', monto: 342.1, dias: 3 }),
     // ── Vencidos ──
     recibo(hoy, { tipo: 'Proveedor', empresa: 'Distribuidora San Jorge', codigo: 'F001-0307', monto: 1320, dias: -2 }),
     recibo(hoy, { tipo: 'Proveedor', empresa: 'Ferretería El Constructor', codigo: 'B001-8821', monto: 640, dias: -5 }),
     // ── Pendientes más adelante ──
-    recibo(hoy, { tipo: 'Impuesto', empresa: 'SUNAT', codigo: 'PDT-0622', monto: 1925, dias: 9 }),
-    recibo(hoy, { tipo: 'Impuesto', empresa: 'Municipalidad de Trujillo', codigo: 'ARB-2025-04', monto: 275, dias: 14 }),
-    recibo(hoy, { tipo: 'Servicio', empresa: 'SEDALIB', codigo: 'SED-56602', monto: 101.8, dias: 33 }),
+    recibo(hoy, { tipo: 'Impuesto', empresa: 'SUNAT', codigo: '0622', monto: 1925, dias: 9 }),
+    recibo(hoy, { tipo: 'Impuesto', empresa: 'Municipalidad de Trujillo', codigo: '202504', monto: 275, dias: 14 }),
+    recibo(hoy, { tipo: 'Servicio', empresa: 'SEDALIB', codigo: '56602', monto: 101.8, dias: 33 }),
   ]
 
   // ── Préstamo de ejemplo: 6 cuotas, las 3 primeras ya pagadas ──
@@ -79,6 +78,8 @@ export function crearDatosEjemplo() {
   for (let i = 1; i <= 6; i++) {
     const fechaLimite = sumarMeses(primera, i - 1, diaCuota)
     const pagada = i <= 3
+    // La tercera cuota pagada incluye mora/interés, como en el ejemplo del banco
+    const interes = i === 3 ? 4.59 : 0
     recibos.push({
       id: nuevoId('r'),
       tipo: 'Préstamo',
@@ -88,7 +89,7 @@ export function crearDatosEjemplo() {
       monto: prestamo.montoCuota,
       igv: null,
       estado: pagada ? 'Pagado' : 'Pendiente',
-      pago: pagada ? { monto: prestamo.montoCuota, fecha: sumarDias(fechaLimite, -1), medio: 'Transferencia', comprobante: `TR-00${3900 + i}` } : null,
+      pago: pagada ? { monto: prestamo.montoCuota + interes, interes, fecha: sumarDias(fechaLimite, -1), medio: 'Transferencia' } : null,
       prestamoId: prestamo.id,
       cuota: i,
       creadoEn: prestamo.creadoEn,

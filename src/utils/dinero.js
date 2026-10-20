@@ -4,9 +4,9 @@ export function formatoSoles(n) {
   return 'S/ ' + v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
-/** Convierte lo que escribe el usuario ("1,250.5") en número; NaN si no es válido. */
+/** Convierte lo que escribe el usuario ("S/ 1,250.5") en número; NaN si no es válido. */
 export function leerMonto(texto) {
-  const limpio = String(texto ?? '').replace(/[\s,]/g, '')
+  const limpio = String(texto ?? '').replace(/s\/|\s|,/gi, '')
   if (!/^(\d+\.?\d*|\.\d+)$/.test(limpio)) return NaN
   return Math.round(parseFloat(limpio) * 100) / 100
 }
