@@ -44,22 +44,22 @@ export function crearDatosEjemplo() {
   const recibos = [
     // ── Pagados (mes pasado y actual) ──
     recibo(hoy, { tipo: 'Servicio', empresa: 'Hidrandina', codigo: '20250412', monto: 312.4, dias: -35, pago: { medio: 'Visa' } }),
-    recibo(hoy, { tipo: 'Servicio', empresa: 'Telefónica', codigo: '77841', monto: 189.9, dias: -28, pago: { medio: 'Mastercard' } }),
-    recibo(hoy, { tipo: 'Servicio', empresa: 'SEDALIB', codigo: '55120', monto: 96.5, dias: -33, pago: { medio: 'Efectivo' } }),
+    recibo(hoy, { tipo: 'Servicio', empresa: 'Telefónica', codigo: '00077841', monto: 189.9, dias: -28, pago: { medio: 'Mastercard' } }),
+    recibo(hoy, { tipo: 'Servicio', empresa: 'SEDALIB', codigo: '00055120', monto: 96.5, dias: -33, pago: { medio: 'Efectivo' } }),
     recibo(hoy, { tipo: 'Impuesto', empresa: 'SUNAT', codigo: '0621', monto: 1840, dias: -20, pago: { medio: 'Transferencia' } }),
-    recibo(hoy, { tipo: 'Proveedor', empresa: 'Distribuidora San Jorge', codigo: 'F001-0231', monto: 2450, dias: -12, pago: { medio: 'Transferencia' } }),
-    recibo(hoy, { tipo: 'Impuesto', empresa: 'Municipalidad de Trujillo', codigo: '202503', monto: 275, dias: -9, pago: { medio: 'Efectivo' } }),
+    recibo(hoy, { tipo: 'Proveedor', empresa: 'Distribuidora San Jorge', codigo: 'F001000231', monto: 2450, dias: -12, pago: { medio: 'Transferencia' } }),
+    recibo(hoy, { tipo: 'Impuesto', empresa: 'Municipalidad de Trujillo', codigo: '2503', monto: 275, dias: -9, pago: { medio: 'Efectivo' } }),
     // ── Vencen hoy y en los próximos 3 días ──
-    recibo(hoy, { tipo: 'Servicio', empresa: 'SEDALIB', codigo: '55987', monto: 108.3, dias: 0 }),
-    recibo(hoy, { tipo: 'Servicio', empresa: 'Telefónica', codigo: '78502', monto: 189.9, dias: 2 }),
+    recibo(hoy, { tipo: 'Servicio', empresa: 'SEDALIB', codigo: '00055987', monto: 108.3, dias: 0 }),
+    recibo(hoy, { tipo: 'Servicio', empresa: 'Telefónica', codigo: '00078502', monto: 189.9, dias: 2 }),
     recibo(hoy, { tipo: 'Servicio', empresa: 'Hidrandina', codigo: '20250518', monto: 342.1, dias: 3 }),
     // ── Vencidos ──
-    recibo(hoy, { tipo: 'Proveedor', empresa: 'Distribuidora San Jorge', codigo: 'F001-0307', monto: 1320, dias: -2 }),
-    recibo(hoy, { tipo: 'Proveedor', empresa: 'Ferretería El Constructor', codigo: 'B001-8821', monto: 640, dias: -5 }),
+    recibo(hoy, { tipo: 'Proveedor', empresa: 'Distribuidora San Jorge', codigo: 'F001000307', monto: 1320, dias: -2 }),
+    recibo(hoy, { tipo: 'Proveedor', empresa: 'Ferretería El Constructor', codigo: 'B001008821', monto: 640, dias: -5 }),
     // ── Pendientes más adelante ──
     recibo(hoy, { tipo: 'Impuesto', empresa: 'SUNAT', codigo: '0622', monto: 1925, dias: 9 }),
-    recibo(hoy, { tipo: 'Impuesto', empresa: 'Municipalidad de Trujillo', codigo: '202504', monto: 275, dias: 14 }),
-    recibo(hoy, { tipo: 'Servicio', empresa: 'SEDALIB', codigo: '56602', monto: 101.8, dias: 33 }),
+    recibo(hoy, { tipo: 'Impuesto', empresa: 'Municipalidad de Trujillo', codigo: '2504', monto: 275, dias: 14 }),
+    recibo(hoy, { tipo: 'Servicio', empresa: 'SEDALIB', codigo: '00056602', monto: 101.8, dias: 33 }),
   ]
 
   // ── Préstamo de ejemplo: 6 cuotas, las 3 primeras ya pagadas ──

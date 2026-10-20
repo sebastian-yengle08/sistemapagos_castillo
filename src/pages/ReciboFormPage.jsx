@@ -7,12 +7,13 @@ import { TIPOS } from '../config/constantes'
 import { buscarDuplicado, crearRecibo, editarRecibo, obtenerRecibo } from '../data/store'
 import { formatoFecha, hoyISO, FECHA_MINIMA, FECHA_MAXIMA, fechaEnRango } from '../utils/fechas'
 import { formatoSoles, leerMonto } from '../utils/dinero'
-import { soloLetras, soloLetrasNumeros, soloMonto, soloCodigo, soloDigitos, soloCodigoProveedor } from '../utils/validacion'
+import { soloLetras, soloLetrasNumeros, soloMonto, soloCodigo, soloDigitos, soloAlfanumerico, codigoValido } from '../utils/validacion'
 
 // Cada tipo de recibo tiene su propio formato de código.
 function limpiarCodigoDe(tipo, texto) {
-  if (tipo === 'Servicio' || tipo === 'Impuesto') return soloDigitos(texto)
-  if (tipo === 'Proveedor') return soloCodigoProveedor(texto)
+  if (tipo === 'Servicio') return soloDigitos(texto).slice(0, 13)
+  if (tipo === 'Impuesto') return soloDigitos(texto).slice(0, 4)
+  if (tipo === 'Proveedor') return soloAlfanumerico(texto).slice(0, 10)
   return soloCodigo(texto)
 }
 
@@ -54,11 +55,13 @@ export default function ReciboFormPage() {
   const limpiarEmpresa = esProveedor ? soloLetrasNumeros : soloLetras
 
   const ayudaCodigo = esProveedor
-    ? 'Solo letras, números y guion medio (-).'
-    : tipo === 'Servicio' || esImpuesto
-      ? 'Solo números.'
-      : 'Elige el tipo de recibo para validar el formato.'
-  const placeholderCodigo = esProveedor ? 'Ej.: F001-0231' : 'Ej.: 55987'
+    ? 'Exactamente 10 caracteres: letras y números.'
+    : tipo === 'Servicio'
+      ? 'Entre 8 y 13 dígitos, solo números.'
+      : esImpuesto
+        ? 'Exactamente 4 dígitos, solo números.'
+        : 'Elige el tipo de recibo para validar el formato.'
+  const placeholderCodigo = esProveedor ? 'Ej.: F001000231' : esImpuesto ? 'Ej.: 0621' : 'Ej.: 20250412'
 
   function elegirTipo(t) {
     setTipo(t)
@@ -90,9 +93,12 @@ export default function ReciboFormPage() {
       e.empresa = 'El RUC debe tener 11 dígitos.'
     }
     if (!codigo.trim()) e.codigo = 'Escribe el código del recibo.'
-    else if ((tipo === 'Servicio' || esImpuesto) && !/^\d+$/.test(codigo.trim())) e.codigo = 'El código debe tener solo números.'
-    else if (esProveedor && !/^[a-zA-Z0-9áéíóúÁÉÍÓÚñÑüÜ-]+$/.test(codigo.trim())) e.codigo = 'El código solo puede tener letras, números y guion medio.'
-    else if (!/[a-zA-Z0-9]/.test(codigo)) e.codigo = 'Escribe un código válido.'
+    else if (!codigoValido(tipo, codigo)) {
+      if (tipo === 'Servicio') e.codigo = 'El código de Servicio debe tener entre 8 y 13 dígitos.'
+      else if (esImpuesto) e.codigo = 'El código de Impuesto debe tener exactamente 4 dígitos.'
+      else if (esProveedor) e.codigo = 'El código de Proveedor debe tener exactamente 10 letras o números.'
+      else e.codigo = 'Escribe un código válido.'
+    }
     if (!fecha) e.fecha = 'Elige la fecha límite de pago.'
     else if (fecha < fechaMinima) e.fecha = 'La fecha límite debe ser desde el 1 de enero de 2026.'
     else if (fecha > fechaMaxima) e.fecha = 'La fecha límite no puede ser posterior al 31 de diciembre de 2050.'
@@ -164,6 +170,7 @@ export default function ReciboFormPage() {
           <input
             id="f-codigo"
             inputMode={tipo === 'Servicio' || esImpuesto ? 'numeric' : 'text'}
+            maxLength={esImpuesto ? 4 : tipo === 'Servicio' ? 13 : esProveedor ? 10 : undefined}
             value={codigo}
             onChange={(e) => setCodigo(limpiarCodigoDe(tipo, e.target.value))}
             placeholder={placeholderCodigo}

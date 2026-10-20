@@ -13,6 +13,7 @@ import { crearDatosEjemplo } from './seed'
 import { hayNube, leerNube, sincronizarNube, suscribirCambios, borrarVoucher } from './persistencia'
 import { hoyISO, FECHA_MINIMA, fechaEnRango, sumarMeses, partes } from '../utils/fechas'
 import { PERFILES, MAX_CUOTAS, LIMITE_CUOTA, LIMITE_PRESTAMO } from '../config/constantes'
+import { codigoValido } from '../utils/validacion'
 
 const CLAVE = 'pagosCastillo.datos.v1'
 
@@ -201,6 +202,7 @@ export function ultimoMedioDeEmpresa(empresa) {
 // ── Recibos ─────────────────────────────────────────────────────────────────
 export function crearRecibo(datos) {
   if (!fechaEnRango(datos.fechaLimite)) return null
+  if (!codigoValido(datos.tipo, datos.codigo)) return null
   const id = nuevoId('r')
   const recibo = {
     id,
@@ -232,6 +234,7 @@ export function editarRecibo(id, cambios) {
   if (!actual || actual.prestamoId || actual.estado === 'Pagado') return null
   if (cambios.fechaLimite !== undefined && !fechaEnRango(cambios.fechaLimite)) return null
   const nuevo = { ...actual, ...cambios, empresa: (cambios.empresa ?? actual.empresa).trim(), codigo: (cambios.codigo ?? actual.codigo).trim() }
+  if (!codigoValido(nuevo.tipo, nuevo.codigo)) return null
   const tocados = Object.keys(ETIQUETAS_CAMPO).filter((k) => (actual[k] ?? null) !== (nuevo[k] ?? null))
   const texto = tocados.length === 1
     ? `Editó ${ETIQUETAS_CAMPO[tocados[0]]} del recibo de ${nuevo.empresa}`
@@ -392,6 +395,8 @@ export function crearPrestamo(datos) {
 /**
  * Cómo quedarían las cuotas al editar un préstamo. Las cuotas YA PAGADAS no se tocan (siguen con su
  * fecha y monto); las demás se recalculan con el monto y la fecha de primera cuota indicados.
+ * Si ya hay pagos, editarPrestamo impide cambiar el monto de cada cuota; aquí solo se recalculan
+ * fechas y las cuotas nuevas.
  * Devuelve { cuotas: [{ numero, fechaLimite, monto, pagada }], minimoCuotas }.
  */
 export function planEdicionPrestamo(id, { numCuotas, montoCuota, primeraFecha }) {
@@ -417,6 +422,9 @@ export function editarPrestamo(id, datos) {
   if (!Number.isInteger(datos.numCuotas) || datos.numCuotas < 1 || datos.numCuotas > MAX_CUOTAS) return null
   if (!(datos.montoCuota > 0) || datos.montoCuota > LIMITE_CUOTA) return null
   if (!(datos.montoTotal > 0) || datos.montoTotal > LIMITE_PRESTAMO) return null
+  // Si ya hay cuotas pagadas, el monto de cada cuota no puede cambiar.
+  const hayPagadas = estado.recibos.some((r) => r.prestamoId === id && r.estado === 'Pagado')
+  if (hayPagadas && Math.abs(Number(datos.montoCuota) - Number(actual.montoCuota)) > 0.005) return null
   const { cuotas, minimoCuotas } = planEdicionPrestamo(id, datos)
   if (datos.numCuotas < minimoCuotas) return null
   const entidad = datos.entidad.trim()

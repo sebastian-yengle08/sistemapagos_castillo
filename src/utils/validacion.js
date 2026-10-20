@@ -12,6 +12,11 @@ export function soloLetrasNumeros(texto) {
     .replace(/\s+/g, ' ')
 }
 
+/** Solo letras y números, sin espacios ni guiones (código de Proveedor). */
+export function soloAlfanumerico(texto) {
+  return String(texto ?? '').replace(/[^a-zA-Z0-9]/g, '')
+}
+
 /** Solo números y punto decimal para montos (el prefijo S/ ya se muestra aparte). */
 export function soloMonto(texto) {
   let v = String(texto ?? '').replace(/[^0-9.]/g, '')
@@ -40,7 +45,14 @@ export function soloDigitos(texto) {
   return String(texto ?? '').replace(/\D/g, '')
 }
 
-/** Solo letras, números y guion medio (código de recibo de Proveedor). */
-export function soloCodigoProveedor(texto) {
-  return String(texto ?? '').replace(/[^a-zA-Z0-9áéíóúÁÉÍÓÚñÑüÜ-]/g, '')
+/**
+ * Formato del código según el tipo de recibo:
+ * Servicio = 8 a 13 dígitos; Impuesto = 4 dígitos; Proveedor = 10 alfanuméricos.
+ */
+export function codigoValido(tipo, codigo) {
+  const c = String(codigo ?? '').trim()
+  if (tipo === 'Servicio') return /^\d{8,13}$/.test(c)
+  if (tipo === 'Impuesto') return /^\d{4}$/.test(c)
+  if (tipo === 'Proveedor') return /^[A-Za-z0-9]{10}$/.test(c)
+  return true
 }

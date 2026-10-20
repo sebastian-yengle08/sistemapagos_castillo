@@ -5,6 +5,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, Landmark } from 'lucide-react'
 import { Boton, Campo, Insignia, Tarjeta, Vacio, claseInput } from '../components/ui'
 import { calcularCuotas, crearPrestamo, editarPrestamo, obtenerPrestamo, planEdicionPrestamo } from '../data/store'
+import { useDatos } from '../data/useDatos'
 import { LIMITE_PRESTAMO, LIMITE_CUOTA, MAX_CUOTAS } from '../config/constantes'
 import { formatoFecha, hoyISO, FECHA_MINIMA, FECHA_MAXIMA, fechaEnRango } from '../utils/fechas'
 import { formatoSoles, leerMonto } from '../utils/dinero'
@@ -18,6 +19,7 @@ export default function PrestamoFormPage() {
   const fechaMinima = FECHA_MINIMA // 1 de enero de 2026
   const fechaMaxima = FECHA_MAXIMA // 31 de diciembre de 2050
   const [original] = useState(() => (id ? obtenerPrestamo(id) : null))
+  const { recibos } = useDatos()
 
   const [entidad, setEntidad] = useState(original?.entidad ?? '')
   const [num, setNum] = useState(original ? String(original.numCuotas) : '')
@@ -25,18 +27,24 @@ export default function PrestamoFormPage() {
   const [primera, setPrimera] = useState(() => (fechaEnRango(original?.primeraFecha) ? original.primeraFecha : hoy))
   const [errores, setErrores] = useState({})
 
+  const cuotasPrestamo = editando ? recibos.filter((r) => r.prestamoId === id) : []
+  const hayPagos = cuotasPrestamo.some((r) => r.estado === 'Pagado')
+  const todasPagadas = cuotasPrestamo.length > 0 && cuotasPrestamo.every((r) => r.estado === 'Pagado')
+  const cuotaBloqueada = editando && hayPagos
+
   const nCuotas = Number(num)
   const mCuota = leerMonto(cuota)
-  const cuotasOk = Number.isInteger(nCuotas) && nCuotas >= 1 && nCuotas <= MAX_CUOTAS && mCuota > 0 && mCuota <= LIMITE_CUOTA && !!primera && primera >= fechaMinima && primera <= fechaMaxima
+  // Si ya hay cuotas pagadas, el monto de la cuota queda bloqueado.
+  const montoCuotaEfectivo = cuotaBloqueada ? (original?.montoCuota ?? 0) : mCuota
+  const cuotasOk = Number.isInteger(nCuotas) && nCuotas >= 1 && nCuotas <= MAX_CUOTAS && montoCuotaEfectivo > 0 && montoCuotaEfectivo <= LIMITE_CUOTA && !!primera && primera >= fechaMinima && primera <= fechaMaxima
 
   // Vista previa de cuotas (al editar, las ya pagadas se muestran como Pagado y no cambian)
   const plan = useMemo(() => {
     if (!cuotasOk) return { cuotas: [], minimoCuotas: 0 }
-    if (editando && original) return planEdicionPrestamo(id, { numCuotas: nCuotas, montoCuota: mCuota, primeraFecha: primera })
-    return { cuotas: calcularCuotas({ numCuotas: nCuotas, montoCuota: mCuota, primeraFecha: primera }), minimoCuotas: 0 }
-  }, [cuotasOk, editando, original, id, nCuotas, mCuota, primera])
+    if (editando && original) return planEdicionPrestamo(id, { numCuotas: nCuotas, montoCuota: montoCuotaEfectivo, primeraFecha: primera })
+    return { cuotas: calcularCuotas({ numCuotas: nCuotas, montoCuota: montoCuotaEfectivo, primeraFecha: primera }), minimoCuotas: 0 }
+  }, [cuotasOk, editando, original, id, nCuotas, montoCuotaEfectivo, primera])
   const montoTotal = Math.round(plan.cuotas.reduce((t, c) => t + c.monto, 0) * 100) / 100
-  const todasPagadas = editando && plan.cuotas.length > 0 && plan.cuotas.every((c) => c.pagada)
 
   if (editando && !original) {
     return (
@@ -56,15 +64,15 @@ export default function PrestamoFormPage() {
     if (!entidad.trim()) er.entidad = 'Escribe el banco o la entidad.'
     if (!(Number.isInteger(nCuotas) && nCuotas >= 1 && nCuotas <= MAX_CUOTAS)) er.num = `Escribe cuántas cuotas son (de 1 a ${MAX_CUOTAS}).`
     else if (editando && cuotasOk && nCuotas < plan.minimoCuotas) er.num = `Ya hay cuotas pagadas hasta la ${plan.minimoCuotas}: no puede haber menos.`
-    if (!(mCuota > 0)) er.cuota = 'Escribe el monto de cada cuota.'
-    else if (mCuota > LIMITE_CUOTA) er.cuota = 'El monto de cada cuota no puede superar los 10 dígitos.'
+    if (!(montoCuotaEfectivo > 0)) er.cuota = 'Escribe el monto de cada cuota.'
+    else if (montoCuotaEfectivo > LIMITE_CUOTA) er.cuota = 'El monto de cada cuota no puede superar los 10 dígitos.'
     if (!primera) er.primera = 'Elige la fecha de la primera cuota.'
     else if (primera < fechaMinima) er.primera = 'La fecha de la primera cuota debe ser desde el 1 de enero de 2026.'
     else if (primera > fechaMaxima) er.primera = 'La fecha de la primera cuota no puede ser posterior al 31 de diciembre de 2050.'
     if (montoTotal > LIMITE_PRESTAMO) er.cuota = `El monto total del préstamo no puede superar S/ ${formatoSoles(LIMITE_PRESTAMO)}.`
     setErrores(er)
     if (Object.keys(er).length) return
-    const datos = { entidad, montoTotal, numCuotas: nCuotas, montoCuota: mCuota, primeraFecha: primera }
+    const datos = { entidad, montoTotal, numCuotas: nCuotas, montoCuota: montoCuotaEfectivo, primeraFecha: primera }
     const p = editando ? editarPrestamo(id, datos) : crearPrestamo(datos)
     if (!p) return setErrores((x) => ({ ...x, primera: 'La fecha de la primera cuota debe estar entre el 1 de enero de 2026 y el 31 de diciembre de 2050.' }))
     navegar(`/prestamos/${p.id}`, { replace: true, state: { aviso: editando ? 'Cambios del préstamo guardados' : 'Préstamo guardado y cuotas creadas' } })
@@ -77,7 +85,15 @@ export default function PrestamoFormPage() {
       </Link>
       <h1 className="text-2xl font-bold sm:text-3xl">{editando ? 'Editar préstamo' : 'Nuevo préstamo'}</h1>
       <p className="mt-1 text-suave">Escribe la cuota tal como la cobra el banco: el sistema no calcula intereses, solo suma las cuotas para obtener el monto total. La mora o interés se agrega al registrar cada pago.</p>
-      {editando && <p className="mt-2 rounded-xl bg-pend-bg px-4 py-2 text-sm font-semibold text-pend-tx">{todasPagadas ? 'Todas las cuotas están pagadas. El monto nuevo se aplicará si agregas más cuotas.' : 'Las cuotas ya pagadas no cambian. Los cambios se aplican a las cuotas que faltan pagar.'}</p>}
+      {editando && (
+        <p className={`mt-2 rounded-xl px-4 py-2 text-sm font-semibold ${hayPagos ? 'bg-pend-bg text-pend-tx' : 'bg-brand/10 text-brand'}`}>
+          {todasPagadas
+            ? 'Todas las cuotas están pagadas. El monto de cada cuota ya no se puede cambiar.'
+            : hayPagos
+              ? 'Este préstamo ya tiene cuotas pagadas: el monto de cada cuota está bloqueado. Puedes cambiar los demás datos.'
+              : 'Aún no hay cuotas pagadas: puedes editar el monto de cada cuota.'}
+        </p>
+      )}
 
       <form noValidate onSubmit={guardar} className="mt-5 flex flex-col gap-5 rounded-2xl border border-borde bg-sup p-4 sm:p-6">
         <Campo etiqueta="Banco o entidad" id="p-ent" error={errores.entidad}>
@@ -97,10 +113,18 @@ export default function PrestamoFormPage() {
               className={claseInput(errores.num)}
             />
           </Campo>
-          <Campo etiqueta="Monto de cada cuota" id="p-cuo" error={errores.cuota} ayuda={todasPagadas ? 'Todas las cuotas están pagadas; este monto se usará si agregas nuevas cuotas.' : 'Máximo 10 dígitos. Se aplica a las cuotas pendientes.'}>
+          <Campo etiqueta="Monto de cada cuota" id="p-cuo" error={errores.cuota} ayuda={cuotaBloqueada ? 'Bloqueado: ya hay cuotas pagadas. Solo se puede cambiar si no hay ningún pago.' : 'Máximo 10 dígitos. Se aplica a las cuotas pendientes.'}>
             <div className="relative">
               <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 font-semibold text-suave">S/</span>
-              <input id="p-cuo" inputMode="decimal" value={cuota} onChange={(e) => setCuota(soloMontoCuota(e.target.value))} placeholder="0.00" className={`${claseInput(errores.cuota)} pl-11`} />
+              <input
+                id="p-cuo"
+                inputMode="decimal"
+                value={cuotaBloqueada ? (original?.montoCuota ?? 0).toFixed(2) : cuota}
+                onChange={(e) => setCuota(soloMontoCuota(e.target.value))}
+                disabled={cuotaBloqueada}
+                placeholder="0.00"
+                className={`${claseInput(errores.cuota)} pl-11 disabled:cursor-not-allowed disabled:bg-slate-900/[.05] disabled:text-suave`}
+              />
             </div>
           </Campo>
           <Campo etiqueta="Fecha de la primera cuota" id="p-fec" error={errores.primera}>

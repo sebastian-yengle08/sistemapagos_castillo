@@ -39,6 +39,7 @@ src/
 ### Modelo de datos
 
 - **recibo**: `id, tipo, empresa, codigo, fechaLimite (aaaa-mm-dd), monto, igv, estado (Pendiente|Pagado), pago {monto, interes, fecha, medio, foto, fotoPath}, prestamoId, cuota, creadoEn`. *Vencido* no se guarda: se calcula al mostrar.
+- **Códigos de recibo**: Servicio = 8 a 13 dígitos; Impuesto = 4 dígitos; Proveedor = 10 caracteres alfanuméricos (sin guiones). Los códigos `PRE-...` de las cuotas de préstamo son internos y no siguen este formato.
 - **prestamo**: `id, entidad, montoTotal, numCuotas, montoCuota, primeraFecha, correlativo`.
 - **historial**: `id, ts (instante UTC), perfil, accion, texto`. Cada función de `store.js` que modifica datos lo registra internamente.
 
