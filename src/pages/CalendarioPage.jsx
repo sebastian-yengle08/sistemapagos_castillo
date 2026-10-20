@@ -8,7 +8,7 @@ import { useDatos } from '../data/useDatos'
 import { Boton, Tarjeta, Vacio, Ventana } from '../components/ui'
 import ReciboFila from '../components/ReciboFila'
 import { estadoVisible } from '../utils/estado'
-import { armar, diaSemanaLunes, diasDelMes, fechaLarga, hoyISO, nombreDia, nombreMes, partes, FECHA_MINIMA, fechaMaxima, finDeMesActual } from '../utils/fechas'
+import { armar, diaSemanaLunes, diasDelMes, fechaLarga, hoyISO, nombreDia, nombreMes, partes, FECHA_MINIMA, fechaMaxima, fechaMaximaRecibo } from '../utils/fechas'
 import { formatoSoles } from '../utils/dinero'
 
 const SEMANA = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
@@ -40,7 +40,7 @@ export default function CalendarioPage() {
   const { perfil } = useAuth()
   const { state } = useLocation()
   const hoy = hoyISO()
-  const fechaMaxRecibo = finDeMesActual() // los recibos nuevos no pueden pasar de este mes
+  const fechaMaxRecibo = fechaMaximaRecibo() // los recibos nuevos no pueden vencer después de hoy + 40 días
   const h = partes(hoy)
   const limiteMax = partes(fechaMaxima())
   const TOTAL_MAX = limiteMax.a * 12 + (limiteMax.m - 1)

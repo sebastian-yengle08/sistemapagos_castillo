@@ -3,10 +3,10 @@ import { useState } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, AlertTriangle } from 'lucide-react'
 import { Boton, Campo, Chip, Tarjeta, Ventana, claseInput } from '../components/ui'
-import { TIPOS, LIMITE_MONTO, NOMBRE_MIN, NOMBRE_MAX } from '../config/constantes'
+import { TIPOS, LIMITE_MONTO, NOMBRE_MIN, NOMBRE_MAX, DIAS_MAXIMOS_RECIBO } from '../config/constantes'
 import { buscarDuplicado, crearRecibo, editarRecibo, motivoRechazo, obtenerRecibo } from '../data/store'
 import { useDatos } from '../data/useDatos'
-import { formatoFecha, hoyISO, FECHA_MINIMA, inicioDeMesActual, finDeMesActual, fechaEnRango, textoRangoFechas } from '../utils/fechas'
+import { formatoFecha, hoyISO, FECHA_MINIMA, fechaMaximaRecibo, fechaEnRango, textoRangoFechas } from '../utils/fechas'
 import { formatoSoles, leerMonto } from '../utils/dinero'
 import { soloLetras, soloLetrasNumeros, soloMontoCuota, soloCodigo, soloDigitos, soloAlfanumerico, codigoValido, limpiarNombre, errorDeRuc } from '../utils/validacion'
 
@@ -26,10 +26,10 @@ export default function ReciboFormPage() {
   const { state } = useLocation()
   const origen = state?.origen // pantalla de la que se vino (se conserva al volver al detalle)
   const hoy = hoyISO() // fecha de hoy en Lima
-  // Un recibo nuevo solo puede tener fecha dentro del mes actual. Al editar se conserva la
+  // Un recibo nuevo vence desde hoy hasta 40 días después. Al editar se conserva la
   // posibilidad de mantener la fecha original de un recibo antiguo.
-  const fechaMinima = editando ? FECHA_MINIMA : inicioDeMesActual()
-  const fechaMax = finDeMesActual() // último día del mes actual
+  const fechaMinima = editando ? FECHA_MINIMA : hoy
+  const fechaMax = fechaMaximaRecibo() // hoy + 40 días
   const [original] = useState(() => (id ? obtenerRecibo(id) : null))
   const { recibos } = useDatos()
   const enVivo = id ? recibos.find((r) => r.id === id) : null // el recibo tal como está AHORA (otro dispositivo pudo cambiarlo)
@@ -115,8 +115,8 @@ export default function ReciboFormPage() {
     if (!fecha) e.fecha = 'Elige la fecha límite de pago.'
     else if (!fechaEnRango(fecha, fechaMinima, fechaMax) && !(editando && fecha === original.fechaLimite)) {
       e.fecha = editando
-        ? `La fecha límite debe estar ${textoRangoFechas(fechaMax)} (último día del mes actual).`
-        : `La fecha límite debe estar entre el ${formatoFecha(fechaMinima)} y el ${formatoFecha(fechaMax)} (mes actual).`
+        ? `La fecha límite debe estar ${textoRangoFechas(fechaMax)} (hoy + ${DIAS_MAXIMOS_RECIBO} días).`
+        : `La fecha límite debe estar entre hoy (${formatoFecha(fechaMinima)}) y el ${formatoFecha(fechaMax)} (${DIAS_MAXIMOS_RECIBO} días desde hoy).`
     }
     const m = leerMonto(monto)
     if (monto.trim() === '') e.monto = 'Escribe el monto total.'
@@ -232,8 +232,8 @@ export default function ReciboFormPage() {
             error={errores.fecha}
             ayuda={
               editando
-                ? `Un recibo nuevo debe vencer este mes; este puede conservar su fecha. Máximo si la cambias: ${formatoFecha(fechaMax)}.`
-                : `Del ${formatoFecha(fechaMinima)} al ${formatoFecha(fechaMax)} (mes actual).`
+                ? `Este recibo puede conservar su fecha. Si la cambias, máximo ${formatoFecha(fechaMax)} (hoy + ${DIAS_MAXIMOS_RECIBO} días).`
+                : `Desde hoy (${formatoFecha(fechaMinima)}) hasta el ${formatoFecha(fechaMax)} (${DIAS_MAXIMOS_RECIBO} días).`
             }
           >
             <input id="f-fecha" type="date" min={fechaMinima} max={fechaMax} value={fecha} onChange={(e) => setFecha(e.target.value)} className={claseInput(errores.fecha)} />

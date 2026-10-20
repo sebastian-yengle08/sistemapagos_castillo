@@ -11,9 +11,9 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { crearDatosEjemplo } from './seed'
 import { hayNube, leerNube, sincronizarNube, suscribirCambios, borrarVoucher, confirmarVersiones } from './persistencia'
-import { hoyISO, FECHA_MINIMA, inicioDeMesActual, finDeMesActual, fechaMaxima, fechaEnRango, formatoFecha, sumarMeses, partes, textoRangoFechas } from '../utils/fechas'
+import { hoyISO, FECHA_MINIMA, fechaMaximaRecibo, fechaMaxima, fechaEnRango, formatoFecha, sumarMeses, partes, textoRangoFechas } from '../utils/fechas'
 import { formatoSoles } from '../utils/dinero'
-import { PERFILES, MAX_CUOTAS, LIMITE_CUOTA, LIMITE_PRESTAMO, LIMITE_MONTO, NOMBRE_MIN, NOMBRE_MAX } from '../config/constantes'
+import { PERFILES, MAX_CUOTAS, LIMITE_CUOTA, LIMITE_PRESTAMO, LIMITE_MONTO, NOMBRE_MIN, NOMBRE_MAX, DIAS_MAXIMOS_RECIBO } from '../config/constantes'
 import { codigoValido, limpiarNombre, sinTildes } from '../utils/validacion'
 
 const CLAVE = 'pagosCastillo.datos.v1'
@@ -281,9 +281,9 @@ export function crearRecibo(datos) {
   if (!esAsistente()) return rechazar(SOLO_ASISTENTE)
   const errNombre = errorDeNombre(datos.empresa)
   if (errNombre) return rechazar(errNombre, 'empresa')
-  const fechaMin = inicioDeMesActual()
-  const fechaMax = finDeMesActual()
-  if (!fechaEnRango(datos.fechaLimite, fechaMin, fechaMax)) return rechazar(`La fecha límite debe estar entre el ${formatoFecha(fechaMin)} y el ${formatoFecha(fechaMax)} (mes actual).`, 'fecha')
+  const fechaMin = hoyISO()
+  const fechaMax = fechaMaximaRecibo()
+  if (!fechaEnRango(datos.fechaLimite, fechaMin, fechaMax)) return rechazar(`La fecha límite debe estar entre el ${formatoFecha(fechaMin)} y el ${formatoFecha(fechaMax)} (hoy + ${DIAS_MAXIMOS_RECIBO} días).`, 'fecha')
   if (!codigoValido(datos.tipo, datos.codigo)) return rechazar('El código no tiene el formato correcto para este tipo de recibo.', 'codigo')
   if (!montoValido(datos.monto)) return rechazar(MSG_MONTO, 'monto')
   if (buscarDuplicado(datos)) return rechazar(MSG_DUPLICADO, 'codigo')
@@ -330,9 +330,9 @@ export function editarRecibo(id, cambios) {
     const errNombre = errorDeNombre(cambios.empresa)
     if (errNombre) return rechazar(errNombre, 'empresa')
   }
-  const fechaMax = finDeMesActual()
+  const fechaMax = fechaMaximaRecibo()
   if (cambios.fechaLimite !== undefined && !fechaEnRango(cambios.fechaLimite, FECHA_MINIMA, fechaMax) && cambios.fechaLimite !== actual.fechaLimite) {
-    return rechazar(`La fecha límite debe estar ${textoRangoFechas(fechaMax)} (último día del mes actual).`, 'fecha')
+    return rechazar(`La fecha límite debe estar ${textoRangoFechas(fechaMax)} (hoy + ${DIAS_MAXIMOS_RECIBO} días).`, 'fecha')
   }
   if (cambios.monto !== undefined && !montoValido(cambios.monto)) return rechazar(MSG_MONTO, 'monto')
   const nuevo = { ...actual, ...cambios, empresa: limpiarNombre(cambios.empresa ?? actual.empresa), codigo: (cambios.codigo ?? actual.codigo).trim() }

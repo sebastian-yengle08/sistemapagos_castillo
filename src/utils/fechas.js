@@ -1,6 +1,6 @@
 // Fechas como texto "aaaa-mm-dd" tratadas como fecha LOCAL (Lima). Nunca se usa
 // new Date("aaaa-mm-dd") porque eso interpreta UTC y puede correr un día.
-import { ZONA, ANIOS_MAXIMOS } from '../config/constantes.js'
+import { ZONA, ANIOS_MAXIMOS, DIAS_MAXIMOS_RECIBO } from '../config/constantes.js'
 
 const pad = (n) => String(n).padStart(2, '0')
 
@@ -15,17 +15,8 @@ export const FECHA_MINIMA = '2026-01-01'
 /** Última fecha permitida: 24 años después de hoy (se mueve con el calendario). */
 export const fechaMaxima = () => sumarMeses(hoyISO(), ANIOS_MAXIMOS * 12)
 
-/** Primer día del mes actual en Lima, como "aaaa-mm-dd". */
-export function inicioDeMesActual() {
-  const { a, m } = partes(hoyISO())
-  return armar(a, m, 1)
-}
-
-/** Último día del mes actual en Lima, como "aaaa-mm-dd". */
-export function finDeMesActual() {
-  const { a, m } = partes(hoyISO())
-  return armar(a, m, diasDelMes(a, m))
-}
+/** Última fecha límite permitida para un recibo: hoy + 40 días (en Lima). */
+export const fechaMaximaRecibo = () => sumarDias(hoyISO(), DIAS_MAXIMOS_RECIBO)
 
 /** Texto del rango permitido para mensajes: "entre el 01/01/2026 y el dd/mm/aaaa". */
 export const textoRangoFechas = (max = fechaMaxima()) => `entre el ${formatoFecha(FECHA_MINIMA)} y el ${formatoFecha(max)}`
