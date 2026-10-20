@@ -6,7 +6,7 @@ import { ArrowLeft, Landmark } from 'lucide-react'
 import { Boton, Campo, Insignia, Tarjeta, Vacio, claseInput } from '../components/ui'
 import { calcularCuotas, crearPrestamo, editarPrestamo, obtenerPrestamo, planEdicionPrestamo } from '../data/store'
 import { LIMITE_PRESTAMO, LIMITE_CUOTA, MAX_CUOTAS } from '../config/constantes'
-import { formatoFecha, hoyISO, inicioAnioISO } from '../utils/fechas'
+import { formatoFecha, hoyISO, FECHA_MINIMA, FECHA_MAXIMA } from '../utils/fechas'
 import { formatoSoles, leerMonto } from '../utils/dinero'
 import { soloLetras, soloMontoCuota } from '../utils/validacion'
 
@@ -15,7 +15,8 @@ export default function PrestamoFormPage() {
   const editando = !!id
   const navegar = useNavigate()
   const hoy = hoyISO() // fecha de hoy en Lima
-  const inicioAnio = inicioAnioISO() // todas las fechas deben ser del año actual o posterior
+  const fechaMinima = FECHA_MINIMA // 1 de enero de 2026
+  const fechaMaxima = FECHA_MAXIMA // 31 de diciembre de 2050
   const [original] = useState(() => (id ? obtenerPrestamo(id) : null))
 
   const [entidad, setEntidad] = useState(original?.entidad ?? '')
@@ -26,7 +27,7 @@ export default function PrestamoFormPage() {
 
   const nCuotas = Number(num)
   const mCuota = leerMonto(cuota)
-  const cuotasOk = Number.isInteger(nCuotas) && nCuotas >= 1 && nCuotas <= MAX_CUOTAS && mCuota > 0 && mCuota <= LIMITE_CUOTA && !!primera && primera >= inicioAnio
+  const cuotasOk = Number.isInteger(nCuotas) && nCuotas >= 1 && nCuotas <= MAX_CUOTAS && mCuota > 0 && mCuota <= LIMITE_CUOTA && !!primera && primera >= fechaMinima && primera <= fechaMaxima
 
   // Vista previa de cuotas (al editar, las ya pagadas se muestran como Pagado y no cambian)
   const plan = useMemo(() => {
@@ -57,13 +58,14 @@ export default function PrestamoFormPage() {
     if (!(mCuota > 0)) er.cuota = 'Escribe el monto de cada cuota.'
     else if (mCuota > LIMITE_CUOTA) er.cuota = 'El monto de cada cuota no puede superar los 10 dígitos.'
     if (!primera) er.primera = 'Elige la fecha de la primera cuota.'
-    else if (primera < inicioAnio) er.primera = 'La fecha de la primera cuota debe ser del año actual o posterior.'
+    else if (primera < fechaMinima) er.primera = 'La fecha de la primera cuota debe ser desde el 1 de enero de 2026.'
+    else if (primera > fechaMaxima) er.primera = 'La fecha de la primera cuota no puede ser posterior al 31 de diciembre de 2050.'
     if (montoTotal > LIMITE_PRESTAMO) er.cuota = `El monto total del préstamo no puede superar S/ ${formatoSoles(LIMITE_PRESTAMO)}.`
     setErrores(er)
     if (Object.keys(er).length) return
     const datos = { entidad, montoTotal, numCuotas: nCuotas, montoCuota: mCuota, primeraFecha: primera }
     const p = editando ? editarPrestamo(id, datos) : crearPrestamo(datos)
-    if (!p) return setErrores((x) => ({ ...x, primera: 'La fecha de la primera cuota debe ser del año actual o posterior.' }))
+    if (!p) return setErrores((x) => ({ ...x, primera: 'La fecha de la primera cuota debe estar entre el 1 de enero de 2026 y el 31 de diciembre de 2050.' }))
     navegar(`/prestamos/${p.id}`, { replace: true, state: { aviso: editando ? 'Cambios del préstamo guardados' : 'Préstamo guardado y cuotas creadas' } })
   }
 
@@ -101,7 +103,7 @@ export default function PrestamoFormPage() {
             </div>
           </Campo>
           <Campo etiqueta="Fecha de la primera cuota" id="p-fec" error={errores.primera}>
-            <input id="p-fec" type="date" min={inicioAnio} value={primera} onChange={(e) => setPrimera(e.target.value)} className={claseInput(errores.primera)} />
+            <input id="p-fec" type="date" min={fechaMinima} max={fechaMaxima} value={primera} onChange={(e) => setPrimera(e.target.value)} className={claseInput(errores.primera)} />
           </Campo>
         </div>
 
