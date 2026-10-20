@@ -4,12 +4,13 @@ import { useEffect, useRef, useState } from 'react'
 import { Camera, CheckCircle2, ImagePlus, Loader2 } from 'lucide-react'
 import { Boton, Campo, Chip, Ventana, claseInput } from './ui'
 import { MEDIOS } from '../config/constantes'
-import { corregirPago, motivoRechazo, registrarPago, ultimoMedioDeEmpresa } from '../data/store'
+import { buscarFotoRepetida, corregirPago, motivoRechazo, registrarPago, ultimoMedioDeEmpresa } from '../data/store'
 import { borrarVoucher, subirVoucher } from '../data/persistencia'
-import { comprimirImagen } from '../utils/imagen'
+import { comprimirImagen, hashBlob } from '../utils/imagen'
+import { MAX_ARCHIVO_MB } from '../config/constantes'
 import { formatoFecha, hoyISO, FECHA_MINIMA, fechaEnRango } from '../utils/fechas'
 import { formatoSoles, leerMonto } from '../utils/dinero'
-import { soloMonto } from '../utils/validacion'
+import { soloMontoCuota } from '../utils/validacion'
 import { interesDePago } from '../utils/prestamos'
 
 export default function RegistrarPagoModal({ recibo, modo = 'registrar', onCerrar }) {
@@ -58,13 +59,17 @@ export default function RegistrarPagoModal({ recibo, modo = 'registrar', onCerra
     e.target.value = '' // permite elegir la misma foto otra vez
     if (!archivo) return
     if (!archivo.type.startsWith('image/')) return setErrores((x) => ({ ...x, foto: 'El archivo debe ser una imagen (foto).' }))
+    if (archivo.size > MAX_ARCHIVO_MB * 1024 * 1024) return setErrores((x) => ({ ...x, foto: `La foto pesa más de ${MAX_ARCHIVO_MB} MB. Elige otra o tómala de nuevo.` }))
     setProcesando(true)
     try {
       const blob = await comprimirImagen(archivo)
-      setFotoNueva({ blob, vista: URL.createObjectURL(blob) })
+      const hash = await hashBlob(blob)
+      const repetida = buscarFotoRepetida(hash, recibo.id)
+      if (repetida) throw Object.assign(new Error(`Esta foto ya se usó en el pago del recibo de ${repetida.empresa} (${repetida.codigo}). Cada pago necesita su propio voucher.`), { usuario: true })
+      setFotoNueva({ blob, hash, vista: URL.createObjectURL(blob) })
       setErrores((x) => ({ ...x, foto: undefined }))
-    } catch {
-      setErrores((x) => ({ ...x, foto: 'No se pudo leer esa foto. Prueba con otra.' }))
+    } catch (err) {
+      setErrores((x) => ({ ...x, foto: err.usuario ? err.message : 'No se pudo leer esa foto. Prueba con otra.' }))
     }
     setProcesando(false)
   }
@@ -76,6 +81,7 @@ export default function RegistrarPagoModal({ recibo, modo = 'registrar', onCerra
     else if (!corrigiendo && totalPagado < montoBase) e.monto = `El monto pagado no puede ser menor al monto ${esCuota ? 'de la cuota' : 'del recibo'} (${formatoSoles(montoBase)}).`
     if (agregarInteres && interesTexto !== '' && !Number.isFinite(interesNum)) e.interes = 'Escribe un monto válido para la mora o interés.'
     else if (agregarInteres && interesNum < 0) e.interes = 'La mora o interés no puede ser negativo.'
+    else if (agregarInteres && interesNum > montoBase) e.interes = 'La mora o interés no puede ser mayor al monto de la cuota. Revisa que no tenga un dígito de más.'
     if (!fecha) e.fecha = 'Elige la fecha de pago.'
     else if (fecha > hoy) e.fecha = 'La fecha de pago no puede ser posterior a hoy.'
     else if (fecha < fechaMinima) e.fecha = 'La fecha de pago no puede ser anterior al 1 de enero de 2026.'
@@ -93,7 +99,8 @@ export default function RegistrarPagoModal({ recibo, modo = 'registrar', onCerra
       setGuardando(false)
       return
     }
-    const datos = { monto: totalPagado, interes: interesValido ? interesNum : 0, fecha, medio, foto: foto.url, fotoPath: foto.path }
+    const fotoHash = fotoNueva ? fotoNueva.hash : (previo?.fotoHash ?? null)
+    const datos = { monto: totalPagado, interes: interesValido ? interesNum : 0, fecha, medio, foto: foto.url, fotoPath: foto.path, fotoHash }
     const resultado = corrigiendo ? corregirPago(recibo.id, datos) : registrarPago(recibo.id, datos)
     if (!resultado) {
       if (fotoNueva) borrarVoucher(foto.path) // la foto recién subida se borra: el pago no se guardó
@@ -203,7 +210,7 @@ export default function RegistrarPagoModal({ recibo, modo = 'registrar', onCerra
                       id="pago-interes"
                       inputMode="decimal"
                       value={interes}
-                      onChange={(e) => setInteres(soloMonto(e.target.value))}
+                      onChange={(e) => setInteres(soloMontoCuota(e.target.value))}
                       placeholder="0.00"
                       className={`${claseInput(errores.interes)} pl-11`}
                     />

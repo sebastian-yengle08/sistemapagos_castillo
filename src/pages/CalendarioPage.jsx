@@ -8,7 +8,7 @@ import { useDatos } from '../data/useDatos'
 import { Boton, Tarjeta, Vacio, Ventana } from '../components/ui'
 import ReciboFila from '../components/ReciboFila'
 import { estadoVisible } from '../utils/estado'
-import { armar, diaSemanaLunes, diasDelMes, fechaLarga, hoyISO, nombreDia, nombreMes, partes, FECHA_MINIMA, FECHA_MAXIMA } from '../utils/fechas'
+import { armar, diaSemanaLunes, diasDelMes, fechaLarga, hoyISO, nombreDia, nombreMes, partes, FECHA_MINIMA, fechaMaxima } from '../utils/fechas'
 import { formatoSoles } from '../utils/dinero'
 
 const SEMANA = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
@@ -19,11 +19,9 @@ const ETIQUETA = {
 }
 const PUNTO = { Pendiente: 'bg-[#f59e0b]', Pagado: 'bg-[#16a34a]', Vencido: 'bg-[#dc2626]' }
 
-// El calendario solo puede navegar entre enero de 2026 y diciembre de 2050.
+// El calendario navega desde enero de 2026 hasta 24 años después de hoy.
 const LIMITE_MIN = partes(FECHA_MINIMA)
-const LIMITE_MAX = partes(FECHA_MAXIMA)
 const TOTAL_MIN = LIMITE_MIN.a * 12 + (LIMITE_MIN.m - 1)
-const TOTAL_MAX = LIMITE_MAX.a * 12 + (LIMITE_MAX.m - 1)
 
 function Contador({ titulo, valor, Icono, clase }) {
   return (
@@ -43,6 +41,8 @@ export default function CalendarioPage() {
   const { state } = useLocation()
   const hoy = hoyISO()
   const h = partes(hoy)
+  const limiteMax = partes(fechaMaxima())
+  const TOTAL_MAX = limiteMax.a * 12 + (limiteMax.m - 1)
   const [vista, setVista] = useState(() => {
     const total = h.a * 12 + (h.m - 1)
     const acotado = Math.min(Math.max(total, TOTAL_MIN), TOTAL_MAX)
@@ -77,14 +77,11 @@ export default function CalendarioPage() {
     return c
   }, [recibos, vista, hoy])
 
-  const proximos = useMemo(
-    () =>
-      recibos
-        .filter((r) => r.estado !== 'Pagado')
-        .sort((a, b) => (a.fechaLimite < b.fechaLimite ? -1 : 1))
-        .slice(0, 6),
-    [recibos],
-  )
+  // Hasta 3 vencidos (los más atrasados) y luego los próximos 6: así los vencidos no tapan a los que vienen
+  const proximos = useMemo(() => {
+    const sinPagar = recibos.filter((r) => r.estado !== 'Pagado').sort((a, b) => (a.fechaLimite < b.fechaLimite ? -1 : 1))
+    return [...sinPagar.filter((r) => r.fechaLimite < hoy).slice(0, 3), ...sinPagar.filter((r) => r.fechaLimite >= hoy).slice(0, 6)]
+  }, [recibos, hoy])
 
   // Celdas del mes (con huecos al inicio según el día de la semana)
   const celdas = useMemo(() => {
@@ -94,7 +91,7 @@ export default function CalendarioPage() {
   }, [vista])
 
   const recibosDia = dia ? (porFecha[dia] ?? []) : []
-  const totalDia = recibosDia.reduce((t, r) => t + r.monto, 0)
+  const totalDia = recibosDia.filter((r) => r.estado !== 'Pagado').reduce((t, r) => t + r.monto, 0) // solo lo que falta pagar
 
   // Resumen del día elegido y botón para agregar un recibo ese día (solo asistente)
   const resumenDia = dia && (
@@ -103,7 +100,7 @@ export default function CalendarioPage() {
         <span className="h-2 w-2 rounded-full bg-brand" aria-hidden="true" /> {recibosDia.length} {recibosDia.length === 1 ? 'recibo programado' : 'recibos programados'}
       </span>
       <span className="text-sm text-suave">
-        Total: <b className="text-base text-tinta">{formatoSoles(totalDia)}</b>
+        Por pagar: <b className="text-base text-tinta">{formatoSoles(totalDia)}</b>
       </span>
     </div>
   )

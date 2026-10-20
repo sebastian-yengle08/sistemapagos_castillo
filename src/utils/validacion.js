@@ -56,3 +56,37 @@ export function codigoValido(tipo, codigo) {
   if (tipo === 'Proveedor') return /^[A-Za-z0-9]{10}$/.test(c)
   return true
 }
+
+/** Quita las tildes (para comparar "Telefónica" con "Telefonica"). */
+export function sinTildes(texto) {
+  return String(texto ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+}
+
+/** Un solo espacio entre palabras y sin espacios al inicio ni al final. */
+export function limpiarNombre(texto) {
+  return String(texto ?? '').replace(/\s+/g, ' ').trim()
+}
+
+/** RUC peruano: 11 dígitos, empieza con 10, 15, 16, 17 o 20 y el último dígito es el verificador (módulo 11). */
+export function rucValido(ruc) {
+  if (!/^\d{11}$/.test(ruc)) return false
+  if (!['10', '15', '16', '17', '20'].includes(ruc.slice(0, 2))) return false
+  const pesos = [5, 4, 3, 2, 7, 6, 5, 4, 3, 2]
+  const suma = pesos.reduce((t, p, i) => t + p * Number(ruc[i]), 0)
+  let verificador = 11 - (suma % 11)
+  if (verificador >= 10) verificador -= 10
+  return verificador === Number(ruc[10])
+}
+
+/**
+ * Revisa el RUC escrito dentro de "Razón Social / RUC": cualquier número largo (8 dígitos o más)
+ * se toma como un RUC y debe tener 11 dígitos y un dígito verificador correcto.
+ * Devuelve el mensaje de error o null.
+ */
+export function errorDeRuc(texto) {
+  for (const numero of String(texto ?? '').match(/\d{8,}/g) ?? []) {
+    if (numero.length !== 11) return 'El RUC debe tener exactamente 11 dígitos.'
+    if (!rucValido(numero)) return 'El RUC no es válido: revisa los dígitos (el último es un dígito verificador).'
+  }
+  return null
+}

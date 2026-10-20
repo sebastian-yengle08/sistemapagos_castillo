@@ -90,3 +90,21 @@ create unique index if not exists recibos_unico_idx
 
 -- El número de préstamo (PRE-0001, PRE-0002...) no se repite.
 create unique index if not exists prestamos_correlativo_idx on public.prestamos (correlativo);
+
+-- Control de versiones: evita que un dispositivo con datos viejos pise el trabajo de otro
+-- (por ejemplo, volver a dejar Pendiente un recibo que otro acaba de pagar).
+-- La base sube `version` sola en cada cambio; la app solo guarda si la fila sigue en la versión que vio.
+alter table public.recibos   add column if not exists version integer not null default 0;
+alter table public.prestamos add column if not exists version integer not null default 0;
+
+create or replace function public.sumar_version() returns trigger
+language plpgsql as $$
+begin
+  new.version := old.version + 1;
+  return new;
+end $$;
+
+drop trigger if exists recibos_version   on public.recibos;
+drop trigger if exists prestamos_version on public.prestamos;
+create trigger recibos_version   before update on public.recibos   for each row execute function public.sumar_version();
+create trigger prestamos_version before update on public.prestamos for each row execute function public.sumar_version();

@@ -1,7 +1,8 @@
-import { createContext, useCallback, useContext, useMemo, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { PIN_HASHES } from '../config/pins'
 import { hashPin } from '../utils/hash'
 import { definirActor } from '../data/store'
+import { INACTIVIDAD_MIN } from '../config/constantes'
 
 const CLAVE_SESION = 'pagosCastillo.sesion'
 const AuthContext = createContext(null)
@@ -47,6 +48,28 @@ export function AuthProvider({ children }) {
     definirActor(null)
     setPerfil(null)
   }, [])
+
+  // Si nadie toca la pantalla en INACTIVIDAD_MIN minutos, la sesión se cierra (por si queda abierta en un equipo compartido)
+  useEffect(() => {
+    if (!perfil) return undefined
+    let ultimo = Date.now()
+    const marcar = () => {
+      ultimo = Date.now()
+    }
+    const vencida = () => Date.now() - ultimo > INACTIVIDAD_MIN * 60 * 1000
+    const alVolver = () => {
+      if (document.visibilityState === 'visible' && vencida()) bloquear()
+    }
+    const eventos = ['pointerdown', 'keydown', 'touchstart', 'scroll']
+    eventos.forEach((e) => window.addEventListener(e, marcar, { passive: true }))
+    document.addEventListener('visibilitychange', alVolver)
+    const reloj = setInterval(() => vencida() && bloquear(), 15000)
+    return () => {
+      eventos.forEach((e) => window.removeEventListener(e, marcar))
+      document.removeEventListener('visibilitychange', alVolver)
+      clearInterval(reloj)
+    }
+  }, [perfil, bloquear])
 
   const valor = useMemo(() => ({ perfil, ingresar, bloquear }), [perfil, ingresar, bloquear])
   return <AuthContext.Provider value={valor}>{children}</AuthContext.Provider>

@@ -3,12 +3,12 @@ import { useState } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, AlertTriangle } from 'lucide-react'
 import { Boton, Campo, Chip, Tarjeta, Ventana, claseInput } from '../components/ui'
-import { TIPOS, LIMITE_MONTO } from '../config/constantes'
-import { buscarDuplicado, codigosDeEmpresa, conflictoDeCodigo, crearRecibo, editarRecibo, motivoRechazo, obtenerRecibo } from '../data/store'
+import { TIPOS, LIMITE_MONTO, NOMBRE_MIN, NOMBRE_MAX, FACTOR_MONTO_ATIPICO } from '../config/constantes'
+import { buscarDuplicado, codigosDeEmpresa, conflictoDeCodigo, crearRecibo, editarRecibo, motivoRechazo, obtenerRecibo, promedioDeEmpresa } from '../data/store'
 import { useDatos } from '../data/useDatos'
-import { formatoFecha, hoyISO, FECHA_MINIMA, FECHA_MAXIMA, fechaEnRango } from '../utils/fechas'
+import { formatoFecha, hoyISO, sumarMeses, FECHA_MINIMA, fechaMaxima, fechaEnRango, textoRangoFechas } from '../utils/fechas'
 import { formatoSoles, leerMonto } from '../utils/dinero'
-import { soloLetras, soloLetrasNumeros, soloMontoCuota, soloCodigo, soloDigitos, soloAlfanumerico, codigoValido } from '../utils/validacion'
+import { soloLetras, soloLetrasNumeros, soloMontoCuota, soloCodigo, soloDigitos, soloAlfanumerico, codigoValido, limpiarNombre, errorDeRuc } from '../utils/validacion'
 
 // Cada tipo de recibo tiene su propio formato de código.
 function limpiarCodigoDe(tipo, texto) {
@@ -27,11 +27,13 @@ export default function ReciboFormPage() {
   const origen = state?.origen // pantalla de la que se vino (se conserva al volver al detalle)
   const hoy = hoyISO() // fecha de hoy en Lima
   const fechaMinima = FECHA_MINIMA // 1 de enero de 2026
-  const fechaMaxima = FECHA_MAXIMA // 31 de diciembre de 2050
+  const fechaMax = fechaMaxima() // hoy + 24 años
   const [original] = useState(() => (id ? obtenerRecibo(id) : null))
   const { recibos } = useDatos()
-  // Los préstamos se registran en su propia sección (menú Préstamos), no como recibo suelto
-  const tiposDisponibles = TIPOS.filter((t) => t !== 'Préstamo' || original?.tipo === 'Préstamo')
+  const enVivo = id ? recibos.find((r) => r.id === id) : null // el recibo tal como está AHORA (otro dispositivo pudo cambiarlo)
+  // Los préstamos se registran en su propia sección (menú Préstamos), no como recibo suelto.
+  // Al editar, el tipo no se puede cambiar: cada tipo tiene su propio formato de código y sus reglas.
+  const tiposDisponibles = editando && original ? [original.tipo] : TIPOS.filter((t) => t !== 'Préstamo')
 
   // Al crear un recibo se empieza con Servicio para que el código aplique su límite desde el inicio.
   const [tipo, setTipo] = useState(original?.tipo ?? 'Servicio')
@@ -45,6 +47,7 @@ export default function ReciboFormPage() {
   const [monto, setMonto] = useState(original ? original.monto.toFixed(2) : '')
   const [errores, setErrores] = useState({})
   const [duplicado, setDuplicado] = useState(null)
+  const [avisos, setAvisos] = useState([]) // advertencias que la persona puede aceptar ("Guardar igual")
 
   // El campo cambia de nombre y de formato según el tipo de recibo
   const esProveedor = tipo === 'Proveedor'
@@ -53,7 +56,7 @@ export default function ReciboFormPage() {
   const etiquetaFecha = esImpuesto ? 'Período tributario (fecha límite)' : 'Fecha límite'
   const placeholderEmpresa = esProveedor ? 'Ej.: Distribuidora ABC 20123456789' : esImpuesto ? 'Ej.: SUNAT, Municipalidad' : 'Ej.: SEDALIB'
   const ayudaEmpresa = esProveedor
-    ? 'Solo letras, números y espacios. Si es RUC, debe tener 11 dígitos.'
+    ? 'Solo letras, números y espacios. Si escribes el RUC, debe tener 11 dígitos y ser válido.'
     : 'Solo letras y signos de nombre. No se permiten números.'
   const limpiarEmpresa = esProveedor ? soloLetrasNumeros : soloLetras
 
@@ -74,20 +77,26 @@ export default function ReciboFormPage() {
     if (c) setCodigo(c)
   }
 
-  function elegirTipo(t) {
-    setTipo(t)
-    // Ajusta lo ya escrito al formato permitido por el nuevo tipo
-    setEmpresa((v) => (t === 'Proveedor' ? soloLetrasNumeros(v) : soloLetras(v)))
-    setCodigo((v) => limpiarCodigoDe(t, v))
-  }
-
-  // Las cuotas de préstamo y los recibos pagados no se editan
-  if (editando && (!original || original.prestamoId || original.estado === 'Pagado')) {
+  // Las cuotas de préstamo y los recibos pagados no se editan; tampoco uno que otro dispositivo ya pagó o eliminó
+  const bloqueo = !editando
+    ? null
+    : !original
+      ? ['No encontramos este recibo', 'Es posible que ya haya sido eliminado.']
+      : original.prestamoId
+        ? ['Las cuotas de un préstamo no se pueden editar', 'Solo se pagan o corrigen desde su detalle.']
+        : original.estado === 'Pagado'
+          ? ['Un recibo pagado no se puede editar', 'Corrige el pago desde su detalle.']
+          : !enVivo
+            ? ['Este recibo ya no existe', 'Se eliminó desde otro dispositivo mientras lo editabas.']
+            : enVivo.estado === 'Pagado'
+              ? ['Este recibo se acaba de pagar', 'Otro dispositivo lo pagó mientras lo editabas, así que ya no se puede editar. Corrige el pago desde su detalle.']
+              : null
+  if (bloqueo) {
     return (
       <Tarjeta className="mx-auto max-w-lg p-6 text-center">
-        <p className="text-lg font-bold">{!original ? 'No encontramos este recibo' : original.prestamoId ? 'Las cuotas de un préstamo no se pueden editar' : 'Un recibo pagado no se puede editar'}</p>
-        <p className="mt-1 text-suave">{!original ? 'Es posible que ya haya sido eliminado.' : original.prestamoId ? 'Solo se pagan o corrigen desde su detalle.' : 'Corrige el pago desde su detalle.'}</p>
-        <Link to={original ? `/recibos/${id}` : '/'} replace state={{ origen }} className="mt-4 inline-flex min-h-12 items-center rounded-full bg-brand px-5 font-semibold text-white">
+        <p className="text-lg font-bold">{bloqueo[0]}</p>
+        <p className="mt-1 text-suave">{bloqueo[1]}</p>
+        <Link to={enVivo ? `/recibos/${id}` : '/'} replace state={{ origen }} className="mt-4 inline-flex min-h-12 items-center rounded-full bg-brand px-5 font-semibold text-white">
           Volver
         </Link>
       </Tarjeta>
@@ -97,12 +106,11 @@ export default function ReciboFormPage() {
   function validar() {
     const e = {}
     if (!tipo) e.tipo = 'Elige el tipo de recibo.'
-    const nombreEmpresa = empresa.trim()
+    const nombreEmpresa = limpiarNombre(empresa)
     if (!nombreEmpresa) e.empresa = esProveedor ? 'Escribe la razón social o el RUC.' : esImpuesto ? 'Escribe el nombre de la entidad.' : 'Escribe el nombre de la empresa.'
     else if (!/[a-zA-Z0-9áéíóúÁÉÍÓÚñÑüÜ]/.test(nombreEmpresa)) e.empresa = 'Escribe un nombre válido.'
-    else if (esProveedor && /^\d+$/.test(nombreEmpresa) && nombreEmpresa.length !== 11) {
-      e.empresa = 'El RUC debe tener 11 dígitos.'
-    }
+    else if (nombreEmpresa.length < NOMBRE_MIN) e.empresa = `El nombre debe tener al menos ${NOMBRE_MIN} caracteres.`
+    else if (esProveedor && errorDeRuc(nombreEmpresa)) e.empresa = errorDeRuc(nombreEmpresa)
     if (!codigo.trim()) e.codigo = 'Escribe el código del recibo.'
     else if (!codigoValido(tipo, codigo)) {
       if (tipo === 'Servicio') e.codigo = 'El código de Servicio debe tener entre 8 y 13 dígitos.'
@@ -114,8 +122,7 @@ export default function ReciboFormPage() {
       if (conflicto) e.codigo = conflicto
     }
     if (!fecha) e.fecha = 'Elige la fecha límite de pago.'
-    else if (fecha < fechaMinima) e.fecha = 'La fecha límite debe ser desde el 1 de enero de 2026.'
-    else if (fecha > fechaMaxima) e.fecha = 'La fecha límite no puede ser posterior al 31 de diciembre de 2050.'
+    else if (!fechaEnRango(fecha)) e.fecha = `La fecha límite debe estar ${textoRangoFechas()}.`
     const m = leerMonto(monto)
     if (monto.trim() === '') e.monto = 'Escribe el monto total.'
     else if (!(m > 0)) e.monto = 'Escribe un monto válido, mayor a cero.'
@@ -124,13 +131,26 @@ export default function ReciboFormPage() {
     return Object.keys(e).length === 0
   }
 
+  // Advertencias que no impiden guardar, pero conviene confirmar (un año o un cero de más se escapan fácil)
+  function advertencias() {
+    const lista = []
+    const m = leerMonto(monto)
+    if (fecha < hoy && !(editando && fecha === original.fechaLimite)) lista.push(`La fecha límite (${formatoFecha(fecha)}) ya pasó: el recibo quedará como Vencido.`)
+    if (fecha > sumarMeses(hoy, 12) && !(editando && fecha === original.fechaLimite)) lista.push(`La fecha límite (${formatoFecha(fecha)}) está a más de un año de hoy. Revisa que el año sea el correcto.`)
+    const habitual = promedioDeEmpresa(empresa, editando ? id : null)
+    if (habitual && !(editando && m === original.monto) && (m > habitual.promedio * FACTOR_MONTO_ATIPICO || m < habitual.promedio / FACTOR_MONTO_ATIPICO)) {
+      lista.push(`El monto (${formatoSoles(m)}) es muy distinto a lo habitual de ${limpiarNombre(empresa)} (promedio de ${formatoSoles(habitual.promedio)} ${habitual.cantidad === 1 ? 'en su único recibo anterior' : `en sus últimos ${habitual.cantidad} recibos`}).`)
+    }
+    return lista
+  }
+
   // Muestra el motivo REAL por el que el store no guardó (junto al campo que corresponde)
   function mostrarRechazo() {
     const r = motivoRechazo()
     setErrores({ [r.campo]: r.mensaje })
   }
 
-  function guardar() {
+  function guardar(confirmado = false) {
     if (!validar()) return
     const datos = {
       tipo,
@@ -142,6 +162,10 @@ export default function ReciboFormPage() {
     // Un mismo recibo (misma empresa y código) no se registra dos veces.
     const previo = buscarDuplicado({ tipo, empresa, codigo, fechaLimite: fecha }, editando ? id : null)
     if (previo) return setDuplicado(previo)
+    if (!confirmado) {
+      const lista = advertencias()
+      if (lista.length) return setAvisos(lista)
+    }
     if (editando) {
       const editado = editarRecibo(id, datos)
       if (!editado) return mostrarRechazo()
@@ -172,11 +196,12 @@ export default function ReciboFormPage() {
           <legend className="mb-1.5 text-base font-semibold">Tipo de recibo</legend>
           <div role="radiogroup" aria-label="Tipo de recibo" className="flex flex-wrap gap-2">
             {tiposDisponibles.map((t) => (
-              <Chip key={t} activo={tipo === t} onClick={() => elegirTipo(t)}>
+              <Chip key={t} activo={tipo === t} onClick={() => !editando && setTipo(t)}>
                 {t}
               </Chip>
             ))}
           </div>
+          {editando && <p className="mt-1 text-sm text-suave">El tipo de un recibo no se puede cambiar.</p>}
           {errores.tipo && (
             <p role="alert" className="mt-1 text-sm font-semibold text-venc-tx">
               {errores.tipo}
@@ -188,13 +213,17 @@ export default function ReciboFormPage() {
           <input
             id="f-empresa"
             list="empresas-conocidas"
+            maxLength={NOMBRE_MAX}
             value={empresa}
             onChange={(e) => {
               const v = limpiarEmpresa(e.target.value)
               setEmpresa(v)
               if (empresasConocidas.includes(v)) autocompletarCodigo(v) // eligió una empresa de la lista
             }}
-            onBlur={() => autocompletarCodigo(empresa)}
+            onBlur={() => {
+              setEmpresa(limpiarNombre(empresa)) // un solo espacio entre palabras
+              autocompletarCodigo(empresa)
+            }}
             placeholder={placeholderEmpresa}
             className={claseInput(errores.empresa)}
           />
@@ -217,7 +246,7 @@ export default function ReciboFormPage() {
         </Campo>
         <div className="grid gap-5 sm:grid-cols-2">
           <Campo etiqueta={etiquetaFecha} id="f-fecha" error={errores.fecha}>
-            <input id="f-fecha" type="date" min={fechaMinima} max={fechaMaxima} value={fecha} onChange={(e) => setFecha(e.target.value)} className={claseInput(errores.fecha)} />
+            <input id="f-fecha" type="date" min={fechaMinima} max={fechaMax} value={fecha} onChange={(e) => setFecha(e.target.value)} className={claseInput(errores.fecha)} />
           </Campo>
           <Campo etiqueta="Monto total" id="f-monto" error={errores.monto}>
             <div className="relative">
@@ -251,7 +280,7 @@ export default function ReciboFormPage() {
               </span>
               <h2 className="text-xl font-bold">Este recibo ya está registrado</h2>
             </div>
-            <p className="mt-3 text-suave">Ya existe un recibo con la misma empresa y el mismo código{duplicado.tipo === 'Servicio' ? ' en ese mes' : ''}:</p>
+            <p className="mt-3 text-suave">Ya existe un recibo con la misma empresa y el mismo código{duplicado.tipo === 'Servicio' || duplicado.tipo === 'Impuesto' ? ' en ese mes' : ''}:</p>
             <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 rounded-xl bg-slate-900/[.04] p-4">
               <dt className="text-suave">{duplicado.tipo === 'Proveedor' ? 'Razón Social / RUC' : duplicado.tipo === 'Impuesto' ? 'Entidad' : 'Empresa'}</dt>
               <dd className="font-semibold">{duplicado.empresa}</dd>
@@ -269,6 +298,34 @@ export default function ReciboFormPage() {
             </div>
           </>
         )}
+      </Ventana>
+
+      {/* Advertencias: fecha pasada o muy lejana, o monto muy distinto a lo habitual */}
+      <Ventana abierta={avisos.length > 0} onCerrar={() => setAvisos([])} titulo="Revisa estos datos">
+        <div className="flex items-center gap-3">
+          <span className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-pend-bg text-pend-tx">
+            <AlertTriangle size={26} aria-hidden="true" />
+          </span>
+          <h2 className="text-xl font-bold">Revisa estos datos</h2>
+        </div>
+        <ul className="mt-3 flex list-disc flex-col gap-2 pl-5 text-suave">
+          {avisos.map((a) => (
+            <li key={a}>{a}</li>
+          ))}
+        </ul>
+        <div className="mt-5 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+          <Boton
+            onClick={() => {
+              setAvisos([])
+              guardar(true)
+            }}
+          >
+            Guardar igual
+          </Boton>
+          <Boton variante="primario" onClick={() => setAvisos([])}>
+            Revisar
+          </Boton>
+        </div>
       </Ventana>
     </div>
   )

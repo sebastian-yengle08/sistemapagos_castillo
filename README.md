@@ -50,13 +50,19 @@ supabase/schema.sql   tablas, índices únicos, Realtime y bucket de fotos
 
 ## Reglas de negocio
 
-- **Fechas**: entre el 1 de enero de 2026 y el 31 de diciembre de 2050, siempre fechas reales del calendario y en hora de Lima. La fecha de pago no puede ser futura.
+- **Fechas**: desde el 1 de enero de 2026 hasta 24 años después de hoy (el límite se mueve con el calendario), siempre fechas reales y en hora de Lima. La fecha de pago no puede ser futura. Los préstamos también deben terminar dentro de ese límite.
 - **Montos**: máximo 10 dígitos enteros y 2 decimales (coincide con `numeric(12,2)` de Supabase). El monto total de un préstamo es la suma de sus cuotas.
 - **Códigos de recibo**: Servicio = 8 a 13 dígitos; Impuesto = 4 dígitos; Proveedor = 10 caracteres alfanuméricos. Los códigos `PRE-...` de las cuotas de préstamo son internos.
 - **Código y empresa (Servicio)**: el código de un servicio es el mismo todos los meses y pertenece a una sola empresa. Al elegir una empresa conocida el código se completa solo; no se puede usar el código de otra empresa ni uno distinto al que la empresa ya tiene.
-- **Recibo repetido**: misma empresa y mismo código (en Servicio, además del mismo mes) no se puede registrar dos veces. Hay índices únicos en la base para respaldarlo.
-- **Pagos**: el monto pagado es el monto del recibo; en las cuotas de préstamo se puede sumar mora/interés. La foto del voucher es obligatoria. Un pago se **puede corregir** (fecha, medio y foto) pero **no anular**; un recibo pagado no se edita ni se elimina.
-- **Préstamos**: los crea y edita el asistente. Cada cuota se crea como un recibo Pendiente de tipo Préstamo. Si ya hay cuotas pagadas, el monto de cada cuota queda bloqueado y las cuotas pagadas no cambian.
+- **Recibo repetido**: misma empresa y mismo código no se puede registrar dos veces (en Servicio e Impuesto, cuyo código se repite cada mes, se compara además el mes). Hay índices únicos en la base para respaldarlo.
+- **Nombres** (empresa, entidad, banco): de 3 a 60 caracteres, un solo espacio entre palabras; al comparar no importan mayúsculas, espacios ni tildes. En Proveedor, cualquier número largo escrito en "Razón Social / RUC" se valida como RUC (11 dígitos y dígito verificador).
+- **Tipo de recibo**: no se puede cambiar al editar (cada tipo tiene su formato de código).
+- **Avisos antes de guardar** (se pueden aceptar con "Guardar igual"): fecha límite ya pasada o a más de un año, y monto 3 veces mayor o menor a lo habitual de esa empresa.
+- **Pagos**: el monto pagado es el monto del recibo; en las cuotas de préstamo se puede sumar mora/interés. La mora no puede superar el monto de la cuota. La foto del voucher es obligatoria (hasta 25 MB, al menos 200 px de lado, y no puede ser la misma foto de otro pago). Un pago se **puede corregir** (fecha, medio y foto) pero **no anular**; un recibo pagado no se edita ni se elimina.
+- **Préstamos**: los crea y edita el asistente. Cada cuota se crea como un recibo Pendiente de tipo Préstamo. Si ya hay cuotas pagadas, el monto de cada cuota queda bloqueado, las cuotas pagadas no cambian y las pendientes no pueden vencer antes que ellas. No se puede registrar dos veces el mismo préstamo (mismo banco, cuotas, monto y primera fecha).
+
+- **Sesión y PIN**: tras 5 PIN incorrectos el teclado se bloquea 30 segundos (el doble en cada nuevo bloqueo) y la sesión se cierra sola tras 15 minutos sin usar la app. El almacén de datos también comprueba el perfil: solo el asistente registra o modifica datos.
+- **Varios dispositivos**: cada fila de recibos y préstamos tiene una `version` (la sube la base sola). Si otro dispositivo cambió la misma fila a la vez, el cambio local no se guarda, se muestra lo último y se avisa. La lectura es por páginas (sin límite de filas) y la hora del historial la pone el servidor.
 
 ## Voucher (foto del comprobante)
 
@@ -64,7 +70,7 @@ Al registrar o corregir un pago, el asistente **debe subir la foto del voucher**
 
 ## Supabase y Vercel
 
-- Ejecutar `supabase/schema.sql` en el SQL Editor de Supabase (se puede repetir): crea las tablas, los índices únicos, el Realtime y el bucket `vouchers`.
+- Ejecutar `supabase/schema.sql` en el SQL Editor de Supabase (se puede repetir): crea las tablas, los índices únicos, el control de versiones, el Realtime y el bucket `vouchers`.
 - En Vercel, configurar el proyecto con **Root Directory = `pagos-castillo`** y las dos variables `VITE_SUPABASE_*`. `vercel.json` ya incluye la reescritura de rutas.
 - **Seguridad (importante antes de usar datos reales):** el acceso con la clave pública queda abierto (las políticas permiten todo al rol `anon`), el PIN se valida en el navegador y el bucket de fotos es público con nombres aleatorios. Hay que reemplazarlo por autenticación de Supabase con políticas por usuario y un bucket privado.
 

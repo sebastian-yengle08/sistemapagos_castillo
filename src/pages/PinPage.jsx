@@ -2,6 +2,26 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Building2, Delete, AlertCircle, CalendarCheck, BellRing, Wallet } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
+import { MAX_INTENTOS_PIN, BLOQUEO_PIN_SEG } from '../config/constantes'
+
+// Intentos fallidos: se guardan en este dispositivo para que recargar la página no los reinicie.
+// Tras MAX_INTENTOS_PIN fallos se bloquea el teclado y cada bloqueo dura el doble que el anterior.
+const CLAVE_INTENTOS = 'pagosCastillo.intentosPin'
+const SIN_FALLOS = { fallos: 0, hasta: 0, bloqueos: 0 }
+function leerIntentos() {
+  try {
+    return { ...SIN_FALLOS, ...(JSON.parse(localStorage.getItem(CLAVE_INTENTOS)) ?? {}) }
+  } catch {
+    return { ...SIN_FALLOS }
+  }
+}
+function guardarIntentos(datos) {
+  try {
+    localStorage.setItem(CLAVE_INTENTOS, JSON.stringify(datos))
+  } catch {
+    /* sin almacenamiento: el bloqueo vale solo mientras la página siga abierta */
+  }
+}
 
 const TECLAS = ['1', '2', '3', '4', '5', '6', '7', '8', '9']
 
@@ -11,13 +31,36 @@ export default function PinPage() {
   const [error, setError] = useState(false)
   const [revisando, setRevisando] = useState(false)
   const ocupado = useRef(false)
+  const [bloqueoHasta, setBloqueoHasta] = useState(() => leerIntentos().hasta)
+  const [ahora, setAhora] = useState(() => Date.now())
+  const segundos = Math.max(0, Math.ceil((bloqueoHasta - ahora) / 1000))
+  const bloqueado = segundos > 0
+  const bloqueadoRef = useRef(false)
+  bloqueadoRef.current = bloqueado
+  useEffect(() => {
+    if (!bloqueado) return undefined
+    const reloj = setInterval(() => setAhora(Date.now()), 500)
+    return () => clearInterval(reloj)
+  }, [bloqueado])
 
   const verificar = useCallback(
     async (valor) => {
       ocupado.current = true
       setRevisando(true)
       const ok = await ingresar(valor)
-      if (!ok) {
+      if (ok) {
+        guardarIntentos({ ...SIN_FALLOS })
+      } else {
+        const intentos = leerIntentos()
+        intentos.fallos += 1
+        if (intentos.fallos >= MAX_INTENTOS_PIN) {
+          intentos.hasta = Date.now() + BLOQUEO_PIN_SEG * 1000 * 2 ** intentos.bloqueos
+          intentos.bloqueos += 1
+          intentos.fallos = 0
+          setBloqueoHasta(intentos.hasta)
+          setAhora(Date.now())
+        }
+        guardarIntentos(intentos)
         setError(true)
         setPin('')
       }
@@ -31,7 +74,7 @@ export default function PinPage() {
   const valor = useRef('')
   const agregar = useCallback(
     (d) => {
-      if (ocupado.current || valor.current.length >= 4) return
+      if (ocupado.current || bloqueadoRef.current || valor.current.length >= 4) return
       setError(false)
       valor.current += d
       setPin(valor.current)
@@ -47,7 +90,7 @@ export default function PinPage() {
     [verificar],
   )
   const borrar = useCallback(() => {
-    if (ocupado.current) return
+    if (ocupado.current || bloqueadoRef.current) return
     setError(false)
     valor.current = valor.current.slice(0, -1)
     setPin(valor.current)
@@ -104,21 +147,26 @@ export default function PinPage() {
           </div>
 
           <div className="mt-3 min-h-11" aria-live="polite">
-            {error && (
+            {error && !bloqueado && (
               <p role="alert" className="flex items-center gap-2 rounded-xl border border-venc-bd bg-venc-bg px-4 py-2 font-semibold text-venc-tx">
                 <AlertCircle size={20} aria-hidden="true" /> PIN incorrecto. Intenta de nuevo.
+              </p>
+            )}
+            {bloqueado && (
+              <p role="alert" className="flex items-center gap-2 rounded-xl border border-venc-bd bg-venc-bg px-4 py-2 font-semibold text-venc-tx">
+                <AlertCircle size={20} aria-hidden="true" /> Demasiados intentos. Espera {segundos} s para volver a intentar.
               </p>
             )}
           </div>
 
           <div className="mt-2 grid grid-cols-3 gap-x-6 gap-y-3 sm:gap-x-8 sm:gap-y-4">
             {TECLAS.map((t) => (
-              <button key={t} type="button" onClick={() => agregar(t)} disabled={revisando} className={tecla} aria-label={t}>
+              <button key={t} type="button" onClick={() => agregar(t)} disabled={revisando || bloqueado} className={tecla} aria-label={t}>
                 {t}
               </button>
             ))}
             <span />
-            <button type="button" onClick={() => agregar('0')} disabled={revisando} className={tecla} aria-label="0">
+            <button type="button" onClick={() => agregar('0')} disabled={revisando || bloqueado} className={tecla} aria-label="0">
               0
             </button>
             <button type="button" onClick={borrar} className={`${tecla} !border-transparent !bg-transparent text-suave`} aria-label="Borrar último dígito">

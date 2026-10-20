@@ -1,6 +1,6 @@
 // Fechas como texto "aaaa-mm-dd" tratadas como fecha LOCAL (Lima). Nunca se usa
 // new Date("aaaa-mm-dd") porque eso interpreta UTC y puede correr un día.
-import { ZONA } from '../config/constantes.js'
+import { ZONA, ANIOS_MAXIMOS } from '../config/constantes.js'
 
 const pad = (n) => String(n).padStart(2, '0')
 
@@ -11,7 +11,12 @@ export function hoyISO() {
 
 /** Rango permitido para las fechas de la app. */
 export const FECHA_MINIMA = '2026-01-01'
-export const FECHA_MAXIMA = '2050-12-31'
+
+/** Última fecha permitida: 24 años después de hoy (se mueve con el calendario). */
+export const fechaMaxima = () => sumarMeses(hoyISO(), ANIOS_MAXIMOS * 12)
+
+/** Texto del rango permitido para mensajes: "entre el 01/01/2026 y el dd/mm/aaaa". */
+export const textoRangoFechas = () => `entre el ${formatoFecha(FECHA_MINIMA)} y el ${formatoFecha(fechaMaxima())}`
 
 /** true si es una fecha real del calendario con formato aaaa-mm-dd (no existe el 30 de febrero). */
 export function fechaReal(fecha) {
@@ -21,7 +26,7 @@ export function fechaReal(fecha) {
 }
 
 /** true si es una fecha real y está dentro del rango permitido. */
-export function fechaEnRango(fecha, min = FECHA_MINIMA, max = FECHA_MAXIMA) {
+export function fechaEnRango(fecha, min = FECHA_MINIMA, max = fechaMaxima()) {
   return fechaReal(fecha) && fecha >= min && fecha <= max
 }
 

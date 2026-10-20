@@ -10,12 +10,14 @@
 // historial desde adentro (función `anotar`), para que no se pueda olvidar.
 // ─────────────────────────────────────────────────────────────────────────────
 import { crearDatosEjemplo } from './seed'
-import { hayNube, leerNube, sincronizarNube, suscribirCambios, borrarVoucher } from './persistencia'
-import { hoyISO, FECHA_MINIMA, fechaEnRango, sumarMeses, partes } from '../utils/fechas'
-import { PERFILES, MAX_CUOTAS, LIMITE_CUOTA, LIMITE_PRESTAMO, LIMITE_MONTO } from '../config/constantes'
-import { codigoValido } from '../utils/validacion'
+import { hayNube, leerNube, sincronizarNube, suscribirCambios, borrarVoucher, confirmarVersiones } from './persistencia'
+import { hoyISO, FECHA_MINIMA, fechaMaxima, fechaEnRango, formatoFecha, sumarMeses, partes, textoRangoFechas } from '../utils/fechas'
+import { formatoSoles } from '../utils/dinero'
+import { PERFILES, MAX_CUOTAS, LIMITE_CUOTA, LIMITE_PRESTAMO, LIMITE_MONTO, NOMBRE_MIN, NOMBRE_MAX } from '../config/constantes'
+import { codigoValido, limpiarNombre, sinTildes } from '../utils/validacion'
 
 const CLAVE = 'pagosCastillo.datos.v1'
+const ESPERA_CARGA_MS = 10000 // si la base no responde en este tiempo, se usan los datos de este dispositivo
 
 // ── Estado en memoria + suscriptores (para que React se entere de los cambios) ──
 let estado = { seq: 0, recibos: [], prestamos: [], historial: [] }
@@ -24,9 +26,11 @@ let actor = null // 'asistente' | 'gerente' (quién hace los cambios)
 let usaNube = hayNube
 let cola = Promise.resolve() // los envíos a Supabase salen de uno en uno y en orden
 
-function avisarError(mensaje) {
-  console.error('[Pagos Castillo]', mensaje)
-  window.dispatchEvent(new CustomEvent('pagos:error', { detail: mensaje }))
+// tecnico: detalle para la consola. usuario: texto que ve la persona (si no se da, un aviso general de conexión).
+function avisarError(tecnico, usuario) {
+  console.error('[Pagos Castillo]', tecnico)
+  const general = 'Hubo un problema al guardar o cargar los datos. Revisa tu conexión e inténtalo de nuevo.'
+  window.dispatchEvent(new CustomEvent('pagos:error', { detail: usuario ?? general }))
 }
 const notificar = () => oyentes.forEach((f) => f())
 
@@ -47,11 +51,15 @@ function guardarLocal(datos) {
   }
 }
 
+const conTiempo = (promesa, ms) =>
+  Promise.race([promesa, new Promise((_, rechazo) => setTimeout(() => rechazo(new Error('tiempo de espera agotado')), ms))])
+
 /** Carga los datos al abrir la app (desde Supabase o localStorage). Llamar una vez. */
 export async function iniciarDatos() {
   if (usaNube) {
     try {
-      const d = await leerNube()
+      const d = await conTiempo(leerNube(), ESPERA_CARGA_MS)
+      confirmarVersiones(d)
       if (d.recibos.length + d.prestamos.length + d.historial.length === 0) {
         // Base vacía: primer arranque, se cargan los datos de ejemplo
         const ejemplo = crearDatosEjemplo()
@@ -66,7 +74,7 @@ export async function iniciarDatos() {
       return
     } catch (e) {
       usaNube = false // no se pudo conectar: se sigue con localStorage
-      avisarError(`No se pudo conectar con Supabase (${e.message}). Se usan datos locales.`)
+      avisarError(`No se pudo conectar con Supabase (${e.message}). Se usan datos locales.`, 'No se pudo conectar con la base de datos. Se muestran los datos guardados en este dispositivo.')
     }
   }
   estado = leerLocal() ?? crearDatosEjemplo()
@@ -85,6 +93,7 @@ export function refrescar() {
     try {
       const remoto = await leerNube()
       if (v !== version) return // hubo un cambio local mientras se leía: la próxima lectura lo recoge
+      confirmarVersiones(remoto) // esta lectura es la que se muestra: desde aquí se guarda comparando contra ella
       const nuevo = { ...estado, ...remoto }
       if (huella(nuevo) === huella(estado)) return // nada cambió: no se redibuja
       estado = nuevo
@@ -116,18 +125,44 @@ export function iniciarSincronizacion() {
   }, 5000)
 }
 
+let generacion = 0 // sube cuando hay un conflicto: los guardados pendientes (hechos sobre datos viejos) se descartan
+
 function publicar(nuevo) {
   const previo = estado
   estado = nuevo
   version++
   if (usaNube) {
+    const miGeneracion = generacion
     cola = cola
-      .then(() => sincronizarNube(previo, nuevo))
-      .catch((e) => avisarError(`No se pudo guardar en Supabase: ${e.message}`))
+      .then(() => (miGeneracion === generacion ? sincronizarNube(previo, nuevo) : undefined))
+      .catch((e) => (e.conflicto ? resolverConflicto(nuevo, e) : avisarError(`No se pudo guardar en Supabase: ${e.message}`)))
   } else {
     guardarLocal(nuevo)
   }
   notificar()
+}
+
+/**
+ * Otro dispositivo cambió la misma fila a la vez: el cambio local NO se guardó. Se vuelve a leer la base
+ * para mostrar lo último, se borran las fotos que se alcanzaron a subir y se avisa a la persona.
+ */
+async function resolverConflicto(fallido, e) {
+  generacion++
+  try {
+    const lectura = await leerNube()
+    confirmarVersiones(lectura)
+    estado = { ...estado, ...lectura }
+    version++
+    notificar()
+    const usadas = new Set(lectura.recibos.map((r) => r.pago?.fotoPath).filter(Boolean))
+    fallido.recibos.forEach((r) => {
+      const ruta = r.pago?.fotoPath
+      if (ruta && !usadas.has(ruta)) borrarVoucher(ruta)
+    })
+  } catch {
+    /* sin conexión: la próxima lectura periódica actualiza la pantalla */
+  }
+  avisarError(e.message, 'Otro dispositivo cambió este dato al mismo tiempo, así que tu cambio no se guardó. La pantalla ya muestra lo último; revisa y vuelve a intentarlo.')
 }
 
 export const suscribir = (f) => {
@@ -136,7 +171,7 @@ export const suscribir = (f) => {
 }
 export const obtenerEstado = () => estado
 
-/** Define quién está usando el sistema (para el historial). */
+/** Define quién está usando el sistema (para el historial y los permisos). */
 export function definirActor(perfil) {
   actor = perfil
 }
@@ -156,7 +191,8 @@ function anotar(historial, accion, texto, perfil = actor) {
 }
 
 const nuevoId = (prefijo) => `${prefijo}_${crypto.randomUUID().slice(0, 12)}`
-const normalizar = (t) => String(t ?? '').toLowerCase().replace(/\s+/g, '')
+// Para comparar nombres y códigos: sin mayúsculas, sin espacios y sin tildes ("Telefónica" = "telefonica")
+const normalizar = (t) => sinTildes(t).toLowerCase().replace(/\s+/g, '')
 
 // ── Motivo de los rechazos ──────────────────────────────────────────────────
 // Las funciones que validan devuelven null cuando no guardan. Antes la pantalla no sabía por qué
@@ -170,15 +206,30 @@ function rechazar(mensaje, campo = 'general') {
 /** Motivo del último rechazo. Llamar justo después de que una función devuelva null. */
 export const motivoRechazo = () => ultimoRechazo ?? { mensaje: 'No se pudo guardar. Actualiza la pantalla e inténtalo de nuevo.', campo: 'general' }
 
-const MSG_FECHA = 'La fecha límite debe estar entre el 1 de enero de 2026 y el 31 de diciembre de 2050.'
+/** Las acciones de registro (recibos, pagos y préstamos) son del asistente; el gerente solo consulta. */
+const esAsistente = () => actor === 'asistente'
+const SOLO_ASISTENTE = 'Solo el asistente puede registrar y modificar datos. El gerente solo consulta.'
+
 const MSG_DUPLICADO = 'Este recibo ya está registrado (misma empresa y mismo código).'
 const MSG_MONTO = 'El monto debe ser mayor a cero y tener como máximo 10 dígitos enteros y 2 decimales.'
 const montoValido = (m) => Number.isFinite(m) && m > 0 && m <= LIMITE_MONTO
 
+/** Largo del nombre de una empresa, entidad o banco. Devuelve el mensaje de error o null. */
+function errorDeNombre(nombre) {
+  const largo = limpiarNombre(nombre).length
+  if (largo < NOMBRE_MIN) return `El nombre debe tener al menos ${NOMBRE_MIN} caracteres.`
+  if (largo > NOMBRE_MAX) return `El nombre no puede tener más de ${NOMBRE_MAX} caracteres.`
+  return null
+}
+
 /** Valida los datos de un préstamo (nuevo o editado). Devuelve true, o false dejando el motivo. */
 function prestamoValido(datos) {
-  if (!fechaEnRango(datos.primeraFecha)) return !rechazar('La fecha de la primera cuota debe estar entre el 1 de enero de 2026 y el 31 de diciembre de 2050.', 'primera')
+  const errNombre = errorDeNombre(datos.entidad)
+  if (errNombre) return !rechazar(errNombre, 'entidad')
+  if (!fechaEnRango(datos.primeraFecha)) return !rechazar(`La fecha de la primera cuota debe estar ${textoRangoFechas()}.`, 'primera')
   if (!Number.isInteger(datos.numCuotas) || datos.numCuotas < 1 || datos.numCuotas > MAX_CUOTAS) return !rechazar(`El número de cuotas debe ser de 1 a ${MAX_CUOTAS}.`, 'num')
+  const ultima = sumarMeses(datos.primeraFecha, datos.numCuotas - 1, partes(datos.primeraFecha).d)
+  if (ultima > fechaMaxima()) return !rechazar(`La última cuota caería el ${formatoFecha(ultima)}, después del ${formatoFecha(fechaMaxima())}. Baja el número de cuotas o adelanta la primera fecha.`, 'num')
   if (!(datos.montoCuota > 0)) return !rechazar('Escribe el monto de cada cuota.', 'cuota')
   if (datos.montoCuota > LIMITE_CUOTA) return !rechazar('El monto de cada cuota no puede superar los 10 dígitos enteros.', 'cuota')
   if (!(datos.montoTotal > 0)) return !rechazar('El monto total del préstamo debe ser mayor a cero.', 'cuota')
@@ -196,12 +247,13 @@ export function obtenerPrestamo(id) {
 
 // Recibos "sueltos": sin las cuotas de préstamo, cuyos códigos PRE-... son internos.
 const sueltos = (ignorarId) => estado.recibos.filter((r) => !r.prestamoId && r.id !== ignorarId)
+const TIPOS_MENSUALES = ['Servicio', 'Impuesto'] // su código se repite cada mes
 const mismoMes = (a, b) => String(a).slice(0, 7) === String(b).slice(0, 7)
 
 /**
  * Busca un recibo ya registrado igual al que se quiere guardar: misma empresa y mismo código
- * (sin distinguir mayúsculas ni espacios). En Servicio el código es el mismo todos los meses,
- * así que además debe ser del mismo mes.
+ * (sin distinguir mayúsculas, espacios ni tildes). En Servicio e Impuesto el código se repite todos los meses
+ * (número de suministro, código de tributo), así que además debe ser del mismo mes.
  */
 export function buscarDuplicado({ tipo, empresa, codigo, fechaLimite }, ignorarId = null) {
   return (
@@ -209,7 +261,7 @@ export function buscarDuplicado({ tipo, empresa, codigo, fechaLimite }, ignorarI
       (r) =>
         normalizar(r.empresa) === normalizar(empresa) &&
         normalizar(r.codigo) === normalizar(codigo) &&
-        (tipo !== 'Servicio' || !fechaLimite || mismoMes(r.fechaLimite, fechaLimite)),
+        (!TIPOS_MENSUALES.includes(tipo) || !fechaLimite || mismoMes(r.fechaLimite, fechaLimite)),
     ) ?? null
   )
 }
@@ -240,9 +292,20 @@ export function conflictoDeCodigo({ tipo, empresa, codigo }, ignorarId = null) {
   }
   const propios = codigosDeEmpresa(empresa, ignorarId)
   if (propios.length && !propios.some((c) => normalizar(c) === normalizar(codigo))) {
-    return `${String(empresa).trim()} ya tiene registrado el código ${propios[0]}. El código de un servicio es el mismo todos los meses.`
+    return `${limpiarNombre(empresa)} ya tiene registrado el código ${propios[0]}. El código de un servicio es el mismo todos los meses.`
   }
   return null
+}
+
+/** Promedio de los últimos recibos de una empresa (para avisar de montos muy distintos a lo habitual). */
+export function promedioDeEmpresa(empresa, ignorarId = null) {
+  const montos = sueltos(ignorarId)
+    .filter((r) => normalizar(r.empresa) === normalizar(empresa))
+    .sort((a, b) => (a.fechaLimite < b.fechaLimite ? 1 : -1))
+    .slice(0, 6)
+    .map((r) => r.monto)
+  if (!montos.length) return null
+  return { promedio: Math.round((montos.reduce((t, m) => t + m, 0) / montos.length) * 100) / 100, cantidad: montos.length }
 }
 
 /** Último medio de pago usado con una empresa (según pagos anteriores) o null. */
@@ -253,23 +316,30 @@ export function ultimoMedioDeEmpresa(empresa) {
   return pagos[0]?.pago.medio ?? null
 }
 
+/** Busca otro pago que ya use exactamente la misma foto de voucher. */
+export function buscarFotoRepetida(huellaFoto, ignorarId = null) {
+  if (!huellaFoto) return null
+  return estado.recibos.find((r) => r.id !== ignorarId && r.pago?.fotoHash === huellaFoto) ?? null
+}
+
 // ── Recibos ─────────────────────────────────────────────────────────────────
 export function crearRecibo(datos) {
-  if (!fechaEnRango(datos.fechaLimite)) return rechazar(MSG_FECHA, 'fecha')
+  if (!esAsistente()) return rechazar(SOLO_ASISTENTE)
+  const errNombre = errorDeNombre(datos.empresa)
+  if (errNombre) return rechazar(errNombre, 'empresa')
+  if (!fechaEnRango(datos.fechaLimite)) return rechazar(`La fecha límite debe estar ${textoRangoFechas()}.`, 'fecha')
   if (!codigoValido(datos.tipo, datos.codigo)) return rechazar('El código no tiene el formato correcto para este tipo de recibo.', 'codigo')
   if (!montoValido(datos.monto)) return rechazar(MSG_MONTO, 'monto')
   const conflicto = conflictoDeCodigo(datos)
   if (conflicto) return rechazar(conflicto, 'codigo')
   if (buscarDuplicado(datos)) return rechazar(MSG_DUPLICADO, 'codigo')
-  const id = nuevoId('r')
   const recibo = {
-    id,
+    id: nuevoId('r'),
     tipo: datos.tipo,
-    empresa: datos.empresa.trim(),
+    empresa: limpiarNombre(datos.empresa),
     codigo: datos.codigo.trim(),
     fechaLimite: datos.fechaLimite,
     monto: datos.monto,
-    igv: datos.igv ?? null,
     estado: 'Pendiente',
     pago: null,
     prestamoId: null,
@@ -279,46 +349,63 @@ export function crearRecibo(datos) {
   publicar({
     ...estado,
     recibos: [...estado.recibos, recibo],
-    historial: anotar(estado.historial, 'crear', `Registró el recibo de ${recibo.empresa} (${recibo.tipo})`),
+    historial: anotar(estado.historial, 'crear', `Registró el recibo de ${recibo.empresa} (${recibo.tipo}) por ${formatoSoles(recibo.monto)}, vence el ${formatoFecha(recibo.fechaLimite)}`),
   })
   return recibo
 }
 
-const ETIQUETAS_CAMPO = { tipo: 'el tipo', empresa: 'la empresa', codigo: 'el código', fechaLimite: 'la fecha límite', monto: 'el monto', igv: 'el IGV' }
+// Cómo se muestra cada dato en el historial cuando se edita
+const CAMPOS_RECIBO = {
+  tipo: ['el tipo', (v) => v],
+  empresa: ['la empresa', (v) => v],
+  codigo: ['el código', (v) => v],
+  fechaLimite: ['la fecha límite', formatoFecha],
+  monto: ['el monto', formatoSoles],
+}
 
 export function editarRecibo(id, cambios) {
+  if (!esAsistente()) return rechazar(SOLO_ASISTENTE)
   const actual = obtenerRecibo(id)
   // Las cuotas de préstamo y los recibos pagados no se editan (un pagado se corrige con corregirPago)
   if (!actual) return rechazar('Este recibo ya no existe. Vuelve al calendario y actualiza la pantalla.')
   if (actual.prestamoId) return rechazar('Las cuotas de un préstamo no se pueden editar.')
   if (actual.estado === 'Pagado') return rechazar('Este recibo ya fue pagado (puede haberse pagado desde otro dispositivo), por eso no se puede editar. Vuelve al detalle para ver su estado actual.')
-  if (cambios.fechaLimite !== undefined && !fechaEnRango(cambios.fechaLimite)) return rechazar(MSG_FECHA, 'fecha')
+  // El tipo de un recibo no cambia: cada tipo tiene su propio formato de código y sus reglas
+  if (cambios.tipo !== undefined && cambios.tipo !== actual.tipo) return rechazar('El tipo de un recibo no se puede cambiar. Elimina el recibo y regístralo de nuevo con el tipo correcto.')
+  if (cambios.empresa !== undefined) {
+    const errNombre = errorDeNombre(cambios.empresa)
+    if (errNombre) return rechazar(errNombre, 'empresa')
+  }
+  if (cambios.fechaLimite !== undefined && !fechaEnRango(cambios.fechaLimite)) return rechazar(`La fecha límite debe estar ${textoRangoFechas()}.`, 'fecha')
   if (cambios.monto !== undefined && !montoValido(cambios.monto)) return rechazar(MSG_MONTO, 'monto')
-  const nuevo = { ...actual, ...cambios, empresa: (cambios.empresa ?? actual.empresa).trim(), codigo: (cambios.codigo ?? actual.codigo).trim() }
+  const nuevo = { ...actual, ...cambios, empresa: limpiarNombre(cambios.empresa ?? actual.empresa), codigo: (cambios.codigo ?? actual.codigo).trim() }
   if (!codigoValido(nuevo.tipo, nuevo.codigo)) return rechazar('El código no tiene el formato correcto para este tipo de recibo.', 'codigo')
   const conflicto = conflictoDeCodigo(nuevo, id)
   if (conflicto) return rechazar(conflicto, 'codigo')
   if (buscarDuplicado(nuevo, id)) return rechazar(MSG_DUPLICADO, 'codigo')
-  const tocados = Object.keys(ETIQUETAS_CAMPO).filter((k) => (actual[k] ?? null) !== (nuevo[k] ?? null))
-  const texto = tocados.length === 1
-    ? `Editó ${ETIQUETAS_CAMPO[tocados[0]]} del recibo de ${nuevo.empresa}`
-    : `Editó el recibo de ${nuevo.empresa}`
+  const tocados = Object.keys(CAMPOS_RECIBO).filter((k) => (actual[k] ?? null) !== (nuevo[k] ?? null))
+  if (!tocados.length) return actual // no hubo cambios: no se guarda ni se anota nada
+  const detalle = tocados.map((k) => `${CAMPOS_RECIBO[k][0]} de ${CAMPOS_RECIBO[k][1](actual[k])} a ${CAMPOS_RECIBO[k][1](nuevo[k])}`).join('; ')
   publicar({
     ...estado,
     recibos: estado.recibos.map((r) => (r.id === id ? nuevo : r)),
-    historial: anotar(estado.historial, 'editar', texto),
+    historial: anotar(estado.historial, 'editar', `Editó el recibo de ${nuevo.empresa} (${nuevo.codigo}): cambió ${detalle}`),
   })
   return nuevo
 }
 
 export function eliminarRecibo(id) {
+  if (!esAsistente()) {
+    rechazar(SOLO_ASISTENTE)
+    return false
+  }
   const actual = obtenerRecibo(id)
-  // No se eliminan cuotas de préstamo ni recibos pagados (primero hay que anular el pago)
+  // No se eliminan cuotas de préstamo ni recibos pagados
   if (!actual || actual.prestamoId || actual.estado === 'Pagado') return false
   publicar({
     ...estado,
     recibos: estado.recibos.filter((r) => r.id !== id),
-    historial: anotar(estado.historial, 'eliminar', `Eliminó el recibo de ${actual.empresa} (${actual.codigo})`),
+    historial: anotar(estado.historial, 'eliminar', `Eliminó el recibo de ${actual.empresa} (${actual.codigo}) por ${formatoSoles(actual.monto)}`),
   })
   return true
 }
@@ -329,19 +416,23 @@ function fechaPagoValida(fecha) {
 }
 
 /**
- * Registra el pago de un recibo. datos: { interes, fecha, medio, foto, fotoPath }.
+ * Registra el pago de un recibo. datos: { interes, fecha, medio, foto, fotoPath, fotoHash }.
  * En las cuotas de préstamo el monto pagado se calcula como cuota + mora/interés.
  * Nunca puede ser menor al monto del recibo o de la cuota.
  */
 export function registrarPago(id, datos) {
+  if (!esAsistente()) return rechazar(SOLO_ASISTENTE)
   const actual = obtenerRecibo(id)
   if (!actual) return rechazar('Este recibo ya no existe. Vuelve al calendario y actualiza la pantalla.')
   if (actual.estado === 'Pagado') return rechazar('Este recibo ya figura como pagado (puede haberse pagado desde otro dispositivo). Cierra esta ventana para ver su estado actual.')
   if (!fechaPagoValida(datos.fecha)) return rechazar('La fecha de pago debe estar entre el 1 de enero de 2026 y hoy.', 'fecha')
   const interes = actual.prestamoId ? Number(datos.interes ?? 0) : 0
   if (!Number.isFinite(interes) || interes < 0) return rechazar('La mora o interés debe ser un monto válido, mayor o igual a cero.', 'interes')
+  if (interes > actual.monto) return rechazar('La mora o interés no puede ser mayor al monto de la cuota. Revisa que no tenga un dígito de más.', 'interes')
   const monto = actual.prestamoId ? Math.round((actual.monto + interes) * 100) / 100 : actual.monto
   if (!(monto > 0) || monto < actual.monto) return rechazar('El monto pagado no puede ser menor al monto del recibo.', 'monto')
+  const repetida = buscarFotoRepetida(datos.fotoHash, id)
+  if (repetida) return rechazar(`Esta foto ya se usó en el pago del recibo de ${repetida.empresa} (${repetida.codigo}). Cada pago necesita su propio voucher.`, 'foto')
   const pagado = {
     ...actual,
     estado: 'Pagado',
@@ -352,22 +443,32 @@ export function registrarPago(id, datos) {
       medio: datos.medio,
       foto: datos.foto ?? null,
       fotoPath: datos.fotoPath ?? null,
+      fotoHash: datos.fotoHash ?? null,
     },
   }
+  const cuotas = actual.prestamoId ? obtenerPrestamo(actual.prestamoId)?.numCuotas : null
+  const de = actual.prestamoId ? `de la cuota ${actual.cuota}${cuotas ? `/${cuotas}` : ''} del préstamo de ${actual.empresa}` : `del recibo de ${actual.empresa}`
   publicar({
     ...estado,
     recibos: estado.recibos.map((r) => (r.id === id ? pagado : r)),
-    historial: anotar(estado.historial, 'pago', `Registró el pago del recibo de ${actual.empresa}`),
+    historial: anotar(estado.historial, 'pago', `Registró el pago ${de}: ${formatoSoles(monto)} con ${datos.medio}`),
   })
   return pagado
 }
 
-/** Corrige la fecha, el medio y la foto de un pago ya registrado. El monto no se modifica. */
+/** Corrige la fecha, el medio y la foto de un pago ya registrado. El monto y la mora no se modifican. */
 export function corregirPago(id, datos) {
+  if (!esAsistente()) return rechazar(SOLO_ASISTENTE)
   const actual = obtenerRecibo(id)
   if (!actual) return rechazar('Este recibo ya no existe. Vuelve al calendario y actualiza la pantalla.')
   if (actual.estado !== 'Pagado') return rechazar('Este recibo ya no figura como pagado. Cierra esta ventana para ver su estado actual.')
   if (!fechaPagoValida(datos.fecha)) return rechazar('La fecha de pago debe estar entre el 1 de enero de 2026 y hoy.', 'fecha')
+  const fotoNueva = (datos.foto ?? null) !== (actual.pago.foto ?? null)
+  const huellaFoto = fotoNueva ? (datos.fotoHash ?? null) : (actual.pago.fotoHash ?? null)
+  if (fotoNueva) {
+    const repetida = buscarFotoRepetida(huellaFoto, id)
+    if (repetida) return rechazar(`Esta foto ya se usó en el pago del recibo de ${repetida.empresa} (${repetida.codigo}). Cada pago necesita su propio voucher.`, 'foto')
+  }
   const corregido = {
     ...actual,
     pago: {
@@ -377,12 +478,18 @@ export function corregirPago(id, datos) {
       medio: datos.medio,
       foto: datos.foto ?? null,
       fotoPath: datos.fotoPath ?? null,
+      fotoHash: huellaFoto,
     },
   }
+  const cambios = []
+  if (actual.pago.fecha !== corregido.pago.fecha) cambios.push(`fecha de pago de ${formatoFecha(actual.pago.fecha)} a ${formatoFecha(corregido.pago.fecha)}`)
+  if (actual.pago.medio !== corregido.pago.medio) cambios.push(`medio de pago de ${actual.pago.medio} a ${corregido.pago.medio}`)
+  if ((actual.pago.foto ?? null) !== (corregido.pago.foto ?? null)) cambios.push('la foto del voucher')
+  if (!cambios.length) return actual // no hubo cambios: no se guarda ni se anota nada
   publicar({
     ...estado,
     recibos: estado.recibos.map((r) => (r.id === id ? corregido : r)),
-    historial: anotar(estado.historial, 'corregir-pago', `Corrigió el pago del recibo de ${actual.empresa}`),
+    historial: anotar(estado.historial, 'corregir-pago', `Corrigió el pago del recibo de ${actual.empresa}: cambió ${cambios.join('; ')}`),
   })
   // Si se cambió la foto, la anterior se borra del almacenamiento
   if (actual.pago?.fotoPath && actual.pago.fotoPath !== corregido.pago.fotoPath) borrarVoucher(actual.pago.fotoPath)
@@ -402,13 +509,18 @@ export function calcularCuotas({ numCuotas, montoCuota, primeraFecha }) {
 
 /** datos: { entidad, montoTotal, numCuotas, montoCuota, primeraFecha } */
 export function crearPrestamo(datos) {
-  if (actor !== 'asistente') return rechazar('Solo el asistente puede registrar préstamos.') // los préstamos los gestiona el asistente
+  if (!esAsistente()) return rechazar('Solo el asistente puede registrar préstamos.') // los préstamos los gestiona el asistente
   if (!prestamoValido(datos)) return null
+  const entidad = limpiarNombre(datos.entidad)
+  const repetido = estado.prestamos.find(
+    (p) => normalizar(p.entidad) === normalizar(entidad) && p.numCuotas === datos.numCuotas && Math.abs(p.montoCuota - datos.montoCuota) < 0.005 && p.primeraFecha === datos.primeraFecha,
+  )
+  if (repetido) return rechazar('Ya existe un préstamo igual (mismo banco, número de cuotas, monto de cuota y fecha de la primera cuota).')
   const correlativo = Math.max(0, ...estado.prestamos.map((p) => p.correlativo)) + 1
   const codigoBase = `PRE-${String(correlativo).padStart(4, '0')}`
   const prestamo = {
     id: nuevoId('p'),
-    entidad: datos.entidad.trim(),
+    entidad,
     montoTotal: datos.montoTotal,
     numCuotas: datos.numCuotas,
     montoCuota: datos.montoCuota,
@@ -416,27 +528,24 @@ export function crearPrestamo(datos) {
     correlativo,
     creadoEn: new Date().toISOString(),
   }
-  const cuotas = calcularCuotas(datos).map((c) => {
-    return {
-      id: nuevoId('r'),
-      tipo: 'Préstamo',
-      empresa: prestamo.entidad,
-      codigo: `${codigoBase}-C${c.numero}/${datos.numCuotas}`,
-      fechaLimite: c.fechaLimite,
-      monto: c.monto,
-      igv: null,
-      estado: 'Pendiente',
-      pago: null,
-      prestamoId: prestamo.id,
-      cuota: c.numero,
-      creadoEn: prestamo.creadoEn,
-    }
-  })
+  const cuotas = calcularCuotas(datos).map((c) => ({
+    id: nuevoId('r'),
+    tipo: 'Préstamo',
+    empresa: prestamo.entidad,
+    codigo: `${codigoBase}-C${c.numero}/${datos.numCuotas}`,
+    fechaLimite: c.fechaLimite,
+    monto: c.monto,
+    estado: 'Pendiente',
+    pago: null,
+    prestamoId: prestamo.id,
+    cuota: c.numero,
+    creadoEn: prestamo.creadoEn,
+  }))
   publicar({
     ...estado,
     prestamos: [...estado.prestamos, prestamo],
     recibos: [...estado.recibos, ...cuotas],
-    historial: anotar(estado.historial, 'prestamo', `Registró el préstamo de ${prestamo.entidad}`),
+    historial: anotar(estado.historial, 'prestamo', `Registró el préstamo de ${prestamo.entidad}: ${prestamo.numCuotas} cuotas de ${formatoSoles(prestamo.montoCuota)} desde el ${formatoFecha(prestamo.primeraFecha)}`),
   })
   return prestamo
 }
@@ -467,14 +576,19 @@ export function planEdicionPrestamo(id, { numCuotas, montoCuota, primeraFecha })
 export function editarPrestamo(id, datos) {
   const actual = obtenerPrestamo(id)
   if (!actual) return rechazar('Este préstamo ya no existe. Vuelve a Préstamos y actualiza la pantalla.')
-  if (actor !== 'asistente') return rechazar('Solo el asistente puede editar préstamos.')
+  if (!esAsistente()) return rechazar('Solo el asistente puede editar préstamos.')
   if (!prestamoValido(datos)) return null
   // Si ya hay cuotas pagadas, el monto de cada cuota no puede cambiar.
   const hayPagadas = estado.recibos.some((r) => r.prestamoId === id && r.estado === 'Pagado')
   if (hayPagadas && Math.abs(Number(datos.montoCuota) - Number(actual.montoCuota)) > 0.005) return rechazar('Ya hay cuotas pagadas (puede haberse pagado una desde otro dispositivo): el monto de cada cuota no se puede cambiar.', 'cuota')
   const { cuotas, minimoCuotas } = planEdicionPrestamo(id, datos)
   if (datos.numCuotas < minimoCuotas) return rechazar(`Ya hay cuotas pagadas hasta la ${minimoCuotas}: no puede haber menos cuotas.`, 'num')
-  const entidad = datos.entidad.trim()
+  // Las cuotas pendientes no pueden quedar con fecha anterior a la de las ya pagadas
+  const ultimaPagada = cuotas.filter((c) => c.pagada).reduce((m, c) => (c.fechaLimite > m ? c.fechaLimite : m), '')
+  if (ultimaPagada && cuotas.some((c) => !c.pagada && c.fechaLimite < ultimaPagada)) {
+    return rechazar(`Las cuotas pendientes no pueden vencer antes de la última cuota pagada (${formatoFecha(ultimaPagada)}). Ajusta la fecha de la primera cuota.`, 'primera')
+  }
+  const entidad = limpiarNombre(datos.entidad)
   const codigoBase = `PRE-${String(actual.correlativo).padStart(4, '0')}`
   const porNumero = new Map(estado.recibos.filter((r) => r.prestamoId === id).map((r) => [r.cuota, r]))
   const ahora = new Date().toISOString()
@@ -482,18 +596,24 @@ export function editarPrestamo(id, datos) {
     const previa = porNumero.get(c.numero)
     const comun = { empresa: entidad, codigo: `${codigoBase}-C${c.numero}/${datos.numCuotas}` }
     if (previa) return { ...previa, ...comun, ...(c.pagada ? {} : { fechaLimite: c.fechaLimite, monto: c.monto }) }
-    return { id: nuevoId('r'), tipo: 'Préstamo', ...comun, fechaLimite: c.fechaLimite, monto: c.monto, igv: null, estado: 'Pendiente', pago: null, prestamoId: id, cuota: c.numero, creadoEn: ahora }
+    return { id: nuevoId('r'), tipo: 'Préstamo', ...comun, fechaLimite: c.fechaLimite, monto: c.monto, estado: 'Pendiente', pago: null, prestamoId: id, cuota: c.numero, creadoEn: ahora }
   })
   const total = Math.round(nuevas.reduce((t, r) => t + r.monto, 0) * 100) / 100
   // Si no queda ninguna cuota pendiente, el monto de cuota del préstamo no cambia:
   // no tendría ninguna cuota donde aplicarse y quedaría un dato inconsistente.
   const montoCuota = nuevas.some((r) => r.estado !== 'Pagado') ? datos.montoCuota : actual.montoCuota
   const prestamo = { ...actual, entidad, numCuotas: datos.numCuotas, montoCuota, primeraFecha: datos.primeraFecha, montoTotal: total }
+  const cambios = []
+  if (actual.entidad !== prestamo.entidad) cambios.push(`el banco de ${actual.entidad} a ${prestamo.entidad}`)
+  if (actual.numCuotas !== prestamo.numCuotas) cambios.push(`las cuotas de ${actual.numCuotas} a ${prestamo.numCuotas}`)
+  if (Math.abs(actual.montoCuota - prestamo.montoCuota) > 0.005) cambios.push(`el monto de cuota de ${formatoSoles(actual.montoCuota)} a ${formatoSoles(prestamo.montoCuota)}`)
+  if (actual.primeraFecha !== prestamo.primeraFecha) cambios.push(`la primera fecha de ${formatoFecha(actual.primeraFecha)} a ${formatoFecha(prestamo.primeraFecha)}`)
+  if (!cambios.length) return actual // no hubo cambios: no se guarda ni se anota nada
   publicar({
     ...estado,
     prestamos: estado.prestamos.map((p) => (p.id === id ? prestamo : p)),
     recibos: [...estado.recibos.filter((r) => r.prestamoId !== id), ...nuevas],
-    historial: anotar(estado.historial, 'editar', `Editó el préstamo de ${entidad}`),
+    historial: anotar(estado.historial, 'editar', `Editó el préstamo de ${entidad}: cambió ${cambios.join('; ')}`),
   })
   return prestamo
 }
@@ -512,4 +632,3 @@ export function resumenPrestamo(prestamo, recibos = estado.recibos) {
     proximo: pendientes[0]?.fechaLimite ?? null,
   }
 }
-

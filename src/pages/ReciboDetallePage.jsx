@@ -7,6 +7,7 @@ import { ArrowLeft, CheckCircle2, Pencil, Trash2, Wallet, FileX, Banknote, ZoomI
 import { useDatos } from '../data/useDatos'
 import { useAuth } from '../context/AuthContext'
 import { eliminarRecibo } from '../data/store'
+import { urlFotoValida } from '../data/persistencia'
 import { Boton, Insignia, Tarjeta, Ventana, Vacio } from '../components/ui'
 import RegistrarPagoModal from '../components/RegistrarPagoModal'
 import { iconoDeTipo } from '../components/ReciboFila'
@@ -116,7 +117,7 @@ export default function ReciboDetallePage() {
           {/* Foto del voucher: se ve igual para asistente y gerente */}
           <div className="mt-3">
             <p className="mb-1.5 text-sm font-semibold text-suave">Foto del voucher</p>
-            {r.pago.foto ? (
+            {r.pago.foto && urlFotoValida(r.pago.foto) ? (
               <button type="button" onClick={() => setVerFoto(true)} className="group relative block overflow-hidden rounded-2xl border border-borde" aria-label="Ver la foto del voucher en grande">
                 <img src={r.pago.foto} alt="Voucher del pago" loading="lazy" className="h-40 w-full max-w-xs object-cover transition group-hover:opacity-90" />
                 <span className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-1 bg-slate-900/60 py-1 text-sm font-semibold text-white">
@@ -124,7 +125,7 @@ export default function ReciboDetallePage() {
                 </span>
               </button>
             ) : (
-              <p className="rounded-xl bg-slate-900/[.04] p-3 text-sm text-suave">Este pago se registró sin foto del voucher.</p>
+              <p className="rounded-xl bg-slate-900/[.04] p-3 text-sm text-suave">{r.pago.foto ? 'La dirección de la foto no es válida.' : 'Este pago se registró sin foto del voucher.'}</p>
             )}
           </div>
         </Tarjeta>
@@ -185,7 +186,7 @@ export default function ReciboDetallePage() {
         />
       )}
 
-      {r.pago?.foto && (
+      {r.pago?.foto && urlFotoValida(r.pago.foto) && (
         <Ventana abierta={verFoto} onCerrar={() => setVerFoto(false)} titulo="Foto del voucher" ancho="max-w-2xl">
           <h2 className="mb-3 pr-10 text-xl font-bold">Voucher de {r.empresa}</h2>
           <img src={r.pago.foto} alt="Voucher del pago" className="max-h-[70vh] w-full rounded-2xl object-contain" />

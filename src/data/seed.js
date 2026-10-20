@@ -22,7 +22,6 @@ function recibo(hoy, o) {
     codigo: o.codigo,
     fechaLimite,
     monto: o.monto,
-    igv: null,
     estado: pagado ? 'Pagado' : 'Pendiente',
     pago: pagado
       ? {
@@ -87,7 +86,6 @@ export function crearDatosEjemplo() {
       codigo: `PRE-0001-C${i}/6`,
       fechaLimite,
       monto: prestamo.montoCuota,
-      igv: null,
       estado: pagada ? 'Pagado' : 'Pendiente',
       pago: pagada ? { monto: prestamo.montoCuota + interes, interes, fecha: sumarDias(fechaLimite, -1), medio: 'Transferencia' } : null,
       prestamoId: prestamo.id,
@@ -97,7 +95,7 @@ export function crearDatosEjemplo() {
   }
 
   // ── Historial de ejemplo (de lo más reciente a lo más antiguo se ordena al mostrar) ──
-  const h = (dias, hh, mm, perfil, accion, texto) => ({ id: nuevoId('h'), ts: instante(sumarDias(hoy, dias), hh, mm), perfil, accion, texto })
+  const h = (dias, hh, mm, perfil, accion, texto) => ({ id: nuevoId('h'), ts: instante(sumarDias(hoy, dias), hh, mm), tsFijo: true, perfil, accion, texto })
   const historial = [
     h(-1, 9, 20, 'Asistente', 'pago', 'Registró el pago del recibo de Municipalidad de Trujillo'),
     h(-2, 10, 15, 'Asistente', 'crear', 'Registró el recibo de Distribuidora San Jorge (Proveedor)'),
