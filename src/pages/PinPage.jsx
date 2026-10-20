@@ -2,7 +2,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Building2, Delete, AlertCircle, CalendarCheck, BellRing, Wallet } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
-import { reiniciarDatos } from '../data/store'
 
 const TECLAS = ['1', '2', '3', '4', '5', '6', '7', '8', '9']
 
@@ -11,7 +10,6 @@ export default function PinPage() {
   const [pin, setPin] = useState('')
   const [error, setError] = useState(false)
   const [revisando, setRevisando] = useState(false)
-  const [reiniciado, setReiniciado] = useState(false)
   const ocupado = useRef(false)
 
   const verificar = useCallback(
@@ -129,20 +127,7 @@ export default function PinPage() {
           </div>
         </main>
 
-        <footer className="mt-4 flex flex-col items-center gap-1 text-sm text-suave">
-          <span className="lg:hidden">Empresa Castillo · Gestión de pagos</span>
-          <button
-            type="button"
-            className="rounded-md px-2 py-1 text-xs underline decoration-dotted hover:text-tinta"
-            onClick={() => {
-              reiniciarDatos()
-              setReiniciado(true)
-              setTimeout(() => setReiniciado(false), 2500)
-            }}
-          >
-            {reiniciado ? 'Datos de ejemplo restablecidos ✓' : 'Restablecer datos de ejemplo'}
-          </button>
-        </footer>
+        <footer className="mt-4 text-sm text-suave lg:hidden">Empresa Castillo · Gestión de pagos</footer>
       </div>
     </div>
   )

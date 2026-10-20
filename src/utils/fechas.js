@@ -13,9 +13,16 @@ export function hoyISO() {
 export const FECHA_MINIMA = '2026-01-01'
 export const FECHA_MAXIMA = '2050-12-31'
 
-/** true si la fecha tiene formato aaaa-mm-dd y está dentro del rango permitido. */
+/** true si es una fecha real del calendario con formato aaaa-mm-dd (no existe el 30 de febrero). */
+export function fechaReal(fecha) {
+  if (typeof fecha !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(fecha)) return false
+  const [a, m, d] = fecha.split('-').map(Number)
+  return m >= 1 && m <= 12 && d >= 1 && d <= new Date(Date.UTC(a, m, 0)).getUTCDate()
+}
+
+/** true si es una fecha real y está dentro del rango permitido. */
 export function fechaEnRango(fecha, min = FECHA_MINIMA, max = FECHA_MAXIMA) {
-  return typeof fecha === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(fecha) && fecha >= min && fecha <= max
+  return fechaReal(fecha) && fecha >= min && fecha <= max
 }
 
 export function partes(iso) {

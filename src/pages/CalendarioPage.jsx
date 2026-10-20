@@ -8,7 +8,7 @@ import { useDatos } from '../data/useDatos'
 import { Boton, Tarjeta, Vacio, Ventana } from '../components/ui'
 import ReciboFila from '../components/ReciboFila'
 import { estadoVisible } from '../utils/estado'
-import { armar, diaSemanaLunes, diasDelMes, fechaLarga, hoyISO, nombreDia, nombreMes, partes, sumarDias, FECHA_MINIMA, FECHA_MAXIMA } from '../utils/fechas'
+import { armar, diaSemanaLunes, diasDelMes, fechaLarga, hoyISO, nombreDia, nombreMes, partes, FECHA_MINIMA, FECHA_MAXIMA } from '../utils/fechas'
 import { formatoSoles } from '../utils/dinero'
 
 const SEMANA = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']

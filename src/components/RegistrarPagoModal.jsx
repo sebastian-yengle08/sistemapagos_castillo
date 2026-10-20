@@ -5,7 +5,7 @@ import { Camera, CheckCircle2, ImagePlus, Loader2 } from 'lucide-react'
 import { Boton, Campo, Chip, Ventana, claseInput } from './ui'
 import { MEDIOS } from '../config/constantes'
 import { corregirPago, motivoRechazo, registrarPago, ultimoMedioDeEmpresa } from '../data/store'
-import { subirVoucher } from '../data/persistencia'
+import { borrarVoucher, subirVoucher } from '../data/persistencia'
 import { comprimirImagen } from '../utils/imagen'
 import { formatoFecha, hoyISO, FECHA_MINIMA, fechaEnRango } from '../utils/fechas'
 import { formatoSoles, leerMonto } from '../utils/dinero'
@@ -46,7 +46,7 @@ export default function RegistrarPagoModal({ recibo, modo = 'registrar', onCerra
     : Math.round((montoBase + (interesValido ? interesNum : 0)) * 100) / 100
 
   // Foto del voucher: la ya guardada (al corregir) o una nueva elegida ahora (se sube al confirmar)
-  const [fotoGuardada, setFotoGuardada] = useState(previo?.foto ? { url: previo.foto, path: previo.fotoPath ?? null } : null)
+  const [fotoGuardada] = useState(previo?.foto ? { url: previo.foto, path: previo.fotoPath ?? null } : null)
   const [fotoNueva, setFotoNueva] = useState(null) // { blob, vista }
   const [procesando, setProcesando] = useState(false)
   const camara = useRef(null)
@@ -96,6 +96,7 @@ export default function RegistrarPagoModal({ recibo, modo = 'registrar', onCerra
     const datos = { monto: totalPagado, interes: interesValido ? interesNum : 0, fecha, medio, foto: foto.url, fotoPath: foto.path }
     const resultado = corrigiendo ? corregirPago(recibo.id, datos) : registrarPago(recibo.id, datos)
     if (!resultado) {
+      if (fotoNueva) borrarVoucher(foto.path) // la foto recién subida se borra: el pago no se guardó
       // El store rechazó el pago: se muestra el motivo real, junto al campo que corresponde
       const r = motivoRechazo()
       setErrores({ [r.campo]: r.mensaje })

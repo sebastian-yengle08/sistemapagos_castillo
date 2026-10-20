@@ -78,3 +78,15 @@ drop policy if exists "prototipo vouchers borrar" on storage.objects;
 create policy "prototipo vouchers ver"    on storage.objects for select to anon using (bucket_id = 'vouchers');
 create policy "prototipo vouchers subir"  on storage.objects for insert to anon with check (bucket_id = 'vouchers');
 create policy "prototipo vouchers borrar" on storage.objects for delete to anon using (bucket_id = 'vouchers');
+
+-- Limpieza: las notificaciones se quitaron de la app.
+drop table if exists public.suscripciones;
+
+-- Un mismo recibo (empresa + código + fecha límite) no puede guardarse dos veces,
+-- ni siquiera desde dos dispositivos a la vez. (No aplica a las cuotas de préstamo.)
+create unique index if not exists recibos_unico_idx
+  on public.recibos (lower(replace(empresa, ' ', '')), lower(replace(codigo, ' ', '')), fecha_limite)
+  where prestamo_id is null;
+
+-- El número de préstamo (PRE-0001, PRE-0002...) no se repite.
+create unique index if not exists prestamos_correlativo_idx on public.prestamos (correlativo);

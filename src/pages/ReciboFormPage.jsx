@@ -4,7 +4,8 @@ import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'reac
 import { ArrowLeft, AlertTriangle } from 'lucide-react'
 import { Boton, Campo, Chip, Tarjeta, Ventana, claseInput } from '../components/ui'
 import { TIPOS, LIMITE_MONTO } from '../config/constantes'
-import { buscarDuplicado, crearRecibo, editarRecibo, motivoRechazo, obtenerRecibo } from '../data/store'
+import { buscarDuplicado, codigosDeEmpresa, conflictoDeCodigo, crearRecibo, editarRecibo, motivoRechazo, obtenerRecibo } from '../data/store'
+import { useDatos } from '../data/useDatos'
 import { formatoFecha, hoyISO, FECHA_MINIMA, FECHA_MAXIMA, fechaEnRango } from '../utils/fechas'
 import { formatoSoles, leerMonto } from '../utils/dinero'
 import { soloLetras, soloLetrasNumeros, soloMontoCuota, soloCodigo, soloDigitos, soloAlfanumerico, codigoValido } from '../utils/validacion'
@@ -28,6 +29,7 @@ export default function ReciboFormPage() {
   const fechaMinima = FECHA_MINIMA // 1 de enero de 2026
   const fechaMaxima = FECHA_MAXIMA // 31 de diciembre de 2050
   const [original] = useState(() => (id ? obtenerRecibo(id) : null))
+  const { recibos } = useDatos()
   // Los préstamos se registran en su propia sección (menú Préstamos), no como recibo suelto
   const tiposDisponibles = TIPOS.filter((t) => t !== 'Préstamo' || original?.tipo === 'Préstamo')
 
@@ -36,7 +38,7 @@ export default function ReciboFormPage() {
   const [empresa, setEmpresa] = useState(original?.empresa ?? '')
   const [codigo, setCodigo] = useState(original?.codigo ?? '')
   const [fecha, setFecha] = useState(() => {
-    if (fechaEnRango(original?.fechaLimite)) return original.fechaLimite
+    if (original) return original.fechaLimite
     const deCalendario = consulta.get('fecha')
     return fechaEnRango(deCalendario) ? deCalendario : hoy
   })
@@ -63,6 +65,14 @@ export default function ReciboFormPage() {
         ? 'Exactamente 4 dígitos, solo números.'
         : 'Elige el tipo de recibo para validar el formato.'
   const placeholderCodigo = esProveedor ? 'Ej.: F001000231' : esImpuesto ? 'Ej.: 0621' : 'Ej.: 20250412'
+
+  // Empresas ya registradas de este tipo (se sugieren al escribir) y su código, que en Servicio es siempre el mismo
+  const empresasConocidas = [...new Set(recibos.filter((r) => !r.prestamoId && r.tipo === tipo).map((r) => r.empresa))].sort()
+  function autocompletarCodigo(nombre) {
+    if (tipo !== 'Servicio' || codigo.trim()) return
+    const c = codigosDeEmpresa(nombre, editando ? id : null)[0]
+    if (c) setCodigo(c)
+  }
 
   function elegirTipo(t) {
     setTipo(t)
@@ -99,6 +109,9 @@ export default function ReciboFormPage() {
       else if (esImpuesto) e.codigo = 'El código de Impuesto debe tener exactamente 4 dígitos.'
       else if (esProveedor) e.codigo = 'El código de Proveedor debe tener exactamente 10 letras o números.'
       else e.codigo = 'Escribe un código válido.'
+    } else {
+      const conflicto = conflictoDeCodigo({ tipo, empresa, codigo }, editando ? id : null)
+      if (conflicto) e.codigo = conflicto
     }
     if (!fecha) e.fecha = 'Elige la fecha límite de pago.'
     else if (fecha < fechaMinima) e.fecha = 'La fecha límite debe ser desde el 1 de enero de 2026.'
@@ -126,8 +139,8 @@ export default function ReciboFormPage() {
       fechaLimite: fecha,
       monto: leerMonto(monto),
     }
-    // El código de comprobante es único: no se puede repetir en otro recibo.
-    const previo = buscarDuplicado(codigo, editando ? id : null)
+    // Un mismo recibo (misma empresa y código) no se registra dos veces.
+    const previo = buscarDuplicado({ tipo, empresa, codigo, fechaLimite: fecha }, editando ? id : null)
     if (previo) return setDuplicado(previo)
     if (editando) {
       const editado = editarRecibo(id, datos)
@@ -172,7 +185,24 @@ export default function ReciboFormPage() {
         </fieldset>
 
         <Campo etiqueta={etiquetaEmpresa} id="f-empresa" error={errores.empresa} ayuda={ayudaEmpresa}>
-          <input id="f-empresa" value={empresa} onChange={(e) => setEmpresa(limpiarEmpresa(e.target.value))} placeholder={placeholderEmpresa} className={claseInput(errores.empresa)} />
+          <input
+            id="f-empresa"
+            list="empresas-conocidas"
+            value={empresa}
+            onChange={(e) => {
+              const v = limpiarEmpresa(e.target.value)
+              setEmpresa(v)
+              if (empresasConocidas.includes(v)) autocompletarCodigo(v) // eligió una empresa de la lista
+            }}
+            onBlur={() => autocompletarCodigo(empresa)}
+            placeholder={placeholderEmpresa}
+            className={claseInput(errores.empresa)}
+          />
+          <datalist id="empresas-conocidas">
+            {empresasConocidas.map((n) => (
+              <option key={n} value={n} />
+            ))}
+          </datalist>
         </Campo>
         <Campo etiqueta="Código del recibo" id="f-codigo" error={errores.codigo} ayuda={ayudaCodigo}>
           <input
@@ -212,16 +242,16 @@ export default function ReciboFormPage() {
       </form>
 
       {/* HU-05: aviso de recibo repetido */}
-      <Ventana abierta={!!duplicado} onCerrar={() => setDuplicado(null)} titulo="Este código ya está registrado">
+      <Ventana abierta={!!duplicado} onCerrar={() => setDuplicado(null)} titulo="Este recibo ya está registrado">
         {duplicado && (
           <>
             <div className="flex items-center gap-3">
               <span className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-pend-bg text-pend-tx">
                 <AlertTriangle size={26} aria-hidden="true" />
               </span>
-              <h2 className="text-xl font-bold">Este código ya está registrado</h2>
+              <h2 className="text-xl font-bold">Este recibo ya está registrado</h2>
             </div>
-            <p className="mt-3 text-suave">Ya existe un recibo con el mismo código:</p>
+            <p className="mt-3 text-suave">Ya existe un recibo con la misma empresa y el mismo código{duplicado.tipo === 'Servicio' ? ' en ese mes' : ''}:</p>
             <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 rounded-xl bg-slate-900/[.04] p-4">
               <dt className="text-suave">{duplicado.tipo === 'Proveedor' ? 'Razón Social / RUC' : duplicado.tipo === 'Impuesto' ? 'Entidad' : 'Empresa'}</dt>
               <dd className="font-semibold">{duplicado.empresa}</dd>

@@ -7,7 +7,7 @@ import { Boton, Campo, Insignia, Tarjeta, Vacio, claseInput } from '../component
 import { calcularCuotas, crearPrestamo, editarPrestamo, motivoRechazo, obtenerPrestamo, planEdicionPrestamo } from '../data/store'
 import { useDatos } from '../data/useDatos'
 import { LIMITE_PRESTAMO, LIMITE_CUOTA, MAX_CUOTAS } from '../config/constantes'
-import { formatoFecha, hoyISO, FECHA_MINIMA, FECHA_MAXIMA, fechaEnRango } from '../utils/fechas'
+import { formatoFecha, hoyISO, FECHA_MINIMA, FECHA_MAXIMA } from '../utils/fechas'
 import { formatoSoles, leerMonto } from '../utils/dinero'
 import { soloLetras, soloMontoCuota } from '../utils/validacion'
 
@@ -24,7 +24,7 @@ export default function PrestamoFormPage() {
   const [entidad, setEntidad] = useState(original?.entidad ?? '')
   const [num, setNum] = useState(original ? String(original.numCuotas) : '')
   const [cuota, setCuota] = useState(original ? original.montoCuota.toFixed(2) : '')
-  const [primera, setPrimera] = useState(() => (fechaEnRango(original?.primeraFecha) ? original.primeraFecha : hoy))
+  const [primera, setPrimera] = useState(() => original?.primeraFecha ?? hoy)
   const [errores, setErrores] = useState({})
 
   const cuotasPrestamo = editando ? recibos.filter((r) => r.prestamoId === id) : []

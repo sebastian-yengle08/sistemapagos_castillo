@@ -1,6 +1,6 @@
 // Piezas visuales básicas reutilizables: botones, chips, insignias, ventanas, etc.
 import { useEffect } from 'react'
-import { Check, CheckCircle2, Clock, AlertCircle, X } from 'lucide-react'
+import { Check, AlertCircle, X } from 'lucide-react'
 
 /** Botón. variante: primario | secundario | peligro. Mínimo 48 px de alto. */
 export function Boton({ variante = 'secundario', className = '', grande, children, ...props }) {
@@ -9,7 +9,6 @@ export function Boton({ variante = 'secundario', className = '', grande, childre
     primario: 'bg-brand text-white shadow-sm hover:brightness-110',
     secundario: 'bg-slate-900/[.05] text-tinta border border-borde hover:bg-slate-900/10',
     peligro: 'bg-venc-tx text-white hover:brightness-110',
-    peligroSuave: 'bg-venc-bg text-venc-tx border border-venc-bd hover:bg-venc-tx hover:text-white',
   }[variante]
   return (
     <button type="button" className={`${base}${v} ${grande ? 'min-h-14 text-lg w-full' : ''} ${className}`} {...props}>
@@ -19,11 +18,10 @@ export function Boton({ variante = 'secundario', className = '', grande, childre
 }
 
 const ESTILOS_ESTADO = {
-  Pendiente: { cls: 'bg-pend-bg text-pend-tx border-pend-bd', dot: 'bg-[#f59e0b]', Icono: Clock },
-  Pagado: { cls: 'bg-pag-bg text-pag-tx border-pag-bd', dot: 'bg-[#16a34a]', Icono: CheckCircle2 },
-  Vencido: { cls: 'bg-venc-bg text-venc-tx border-venc-bd', dot: 'bg-[#dc2626]', Icono: AlertCircle },
+  Pendiente: { cls: 'bg-pend-bg text-pend-tx border-pend-bd', dot: 'bg-[#f59e0b]' },
+  Pagado: { cls: 'bg-pag-bg text-pag-tx border-pag-bd', dot: 'bg-[#16a34a]' },
+  Vencido: { cls: 'bg-venc-bg text-venc-tx border-venc-bd', dot: 'bg-[#dc2626]' },
 }
-export const estiloEstado = (e) => ESTILOS_ESTADO[e]
 
 /** Insignia de estado: color + punto + palabra. */
 export function Insignia({ estado }) {

@@ -1,4 +1,4 @@
-﻿// Datos de ejemplo, calculados RELATIVOS A LA FECHA ACTUAL (hoy en Lima) para que
+// Datos de ejemplo, calculados RELATIVOS A LA FECHA ACTUAL (hoy en Lima) para que
 // la demostración siempre se vea viva: hay recibos que vencen hoy, en 3 días,
 // vencidos, pagados con varios medios, etc.
 import { hoyISO, sumarDias, sumarMeses, partes } from '../utils/fechas'
@@ -50,16 +50,16 @@ export function crearDatosEjemplo() {
     recibo(hoy, { tipo: 'Proveedor', empresa: 'Distribuidora San Jorge', codigo: 'F001000231', monto: 2450, dias: -12, pago: { medio: 'Transferencia' } }),
     recibo(hoy, { tipo: 'Impuesto', empresa: 'Municipalidad de Trujillo', codigo: '2503', monto: 275, dias: -9, pago: { medio: 'Efectivo' } }),
     // ── Vencen hoy y en los próximos 3 días ──
-    recibo(hoy, { tipo: 'Servicio', empresa: 'SEDALIB', codigo: '00055987', monto: 108.3, dias: 0 }),
-    recibo(hoy, { tipo: 'Servicio', empresa: 'Telefónica', codigo: '00078502', monto: 189.9, dias: 2 }),
-    recibo(hoy, { tipo: 'Servicio', empresa: 'Hidrandina', codigo: '20250518', monto: 342.1, dias: 3 }),
+    recibo(hoy, { tipo: 'Servicio', empresa: 'SEDALIB', codigo: '00055120', monto: 108.3, dias: 0 }),
+    recibo(hoy, { tipo: 'Servicio', empresa: 'Telefónica', codigo: '00077841', monto: 189.9, dias: 2 }),
+    recibo(hoy, { tipo: 'Servicio', empresa: 'Hidrandina', codigo: '20250412', monto: 342.1, dias: 3 }),
     // ── Vencidos ──
     recibo(hoy, { tipo: 'Proveedor', empresa: 'Distribuidora San Jorge', codigo: 'F001000307', monto: 1320, dias: -2 }),
     recibo(hoy, { tipo: 'Proveedor', empresa: 'Ferretería El Constructor', codigo: 'B001008821', monto: 640, dias: -5 }),
     // ── Pendientes más adelante ──
     recibo(hoy, { tipo: 'Impuesto', empresa: 'SUNAT', codigo: '0622', monto: 1925, dias: 9 }),
     recibo(hoy, { tipo: 'Impuesto', empresa: 'Municipalidad de Trujillo', codigo: '2504', monto: 275, dias: 14 }),
-    recibo(hoy, { tipo: 'Servicio', empresa: 'SEDALIB', codigo: '00056602', monto: 101.8, dias: 33 }),
+    recibo(hoy, { tipo: 'Servicio', empresa: 'SEDALIB', codigo: '00055120', monto: 101.8, dias: 33 }),
   ]
 
   // ── Préstamo de ejemplo: 6 cuotas, las 3 primeras ya pagadas ──
@@ -99,9 +99,7 @@ export function crearDatosEjemplo() {
   // ── Historial de ejemplo (de lo más reciente a lo más antiguo se ordena al mostrar) ──
   const h = (dias, hh, mm, perfil, accion, texto) => ({ id: nuevoId('h'), ts: instante(sumarDias(hoy, dias), hh, mm), perfil, accion, texto })
   const historial = [
-    h(-1, 9, 5, 'Asistente', 'ingreso', 'Ingresó al sistema'),
     h(-1, 9, 20, 'Asistente', 'pago', 'Registró el pago del recibo de Municipalidad de Trujillo'),
-    h(-1, 17, 40, 'Gerente', 'ingreso', 'Ingresó al sistema'),
     h(-2, 10, 15, 'Asistente', 'crear', 'Registró el recibo de Distribuidora San Jorge (Proveedor)'),
     h(-2, 10, 32, 'Asistente', 'editar', 'Editó el monto del recibo de Distribuidora San Jorge'),
     h(-3, 15, 0, 'Asistente', 'prestamo', 'Registró el préstamo de Banco de Crédito'),

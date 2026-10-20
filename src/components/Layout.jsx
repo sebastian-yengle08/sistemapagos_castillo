@@ -48,16 +48,6 @@ function Logo() {
   )
 }
 
-/** Campana con el contador de avisos. */
-function Campana({ avisos }) {
-  return (
-    <Link to="/avisos" aria-label={`Avisos: ${avisos}`} className="relative grid h-11 w-11 place-items-center rounded-full text-white hover:bg-white/10">
-      <Bell size={22} aria-hidden="true" />
-      {avisos > 0 && <span className="absolute right-0.5 top-0.5 grid min-w-5 place-items-center rounded-full bg-venc-tx px-1 text-xs font-bold leading-5 text-white">{avisos}</span>}
-    </Link>
-  )
-}
-
 export default function Layout() {
   const { perfil, bloquear } = useAuth()
   const { recibos } = useDatos()
@@ -112,7 +102,6 @@ export default function Layout() {
           <div className="flex h-14 items-center justify-between">
             <Logo />
             <div className="flex items-center gap-1">
-              <Campana avisos={avisos} />
               <button type="button" onClick={bloquear} className="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2.5 text-sm font-semibold text-white/90 hover:bg-white/10">
                 <LogOut size={18} aria-hidden="true" /> Salir
               </button>

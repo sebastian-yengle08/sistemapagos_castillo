@@ -1,4 +1,4 @@
-﻿// ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
 // Capa de datos de Pagos Castillo.
 //
 // Las pantallas SOLO hablan con este archivo. Los datos viven en memoria (rápido
@@ -47,27 +47,11 @@ function guardarLocal(datos) {
   }
 }
 
-/**
- * Corrige fechas fuera del rango permitido (por ejemplo, datos locales guardados
- * por versiones antiguas de la app). Las fechas de pago tampoco pueden ser futuras.
- */
-function repararFechas(datos) {
-  const hoy = hoyISO()
-  const fecha = (f) => (fechaEnRango(f) ? f : hoy)
-  const fechaPago = (f) => (fechaEnRango(f, FECHA_MINIMA, hoy) ? f : hoy)
-  const recibos = (datos.recibos ?? []).map((r) => {
-    const pago = r.pago?.fecha ? { ...r.pago, fecha: fechaPago(r.pago.fecha) } : r.pago
-    return { ...r, fechaLimite: fecha(r.fechaLimite), pago }
-  })
-  const prestamos = (datos.prestamos ?? []).map((p) => ({ ...p, primeraFecha: fecha(p.primeraFecha) }))
-  return { ...datos, recibos, prestamos }
-}
-
 /** Carga los datos al abrir la app (desde Supabase o localStorage). Llamar una vez. */
 export async function iniciarDatos() {
   if (usaNube) {
     try {
-      const d = repararFechas(await leerNube())
+      const d = await leerNube()
       if (d.recibos.length + d.prestamos.length + d.historial.length === 0) {
         // Base vacía: primer arranque, se cargan los datos de ejemplo
         const ejemplo = crearDatosEjemplo()
@@ -85,7 +69,7 @@ export async function iniciarDatos() {
       avisarError(`No se pudo conectar con Supabase (${e.message}). Se usan datos locales.`)
     }
   }
-  estado = repararFechas(leerLocal() ?? crearDatosEjemplo())
+  estado = leerLocal() ?? crearDatosEjemplo()
   guardarLocal(estado)
 }
 
@@ -187,6 +171,7 @@ function rechazar(mensaje, campo = 'general') {
 export const motivoRechazo = () => ultimoRechazo ?? { mensaje: 'No se pudo guardar. Actualiza la pantalla e inténtalo de nuevo.', campo: 'general' }
 
 const MSG_FECHA = 'La fecha límite debe estar entre el 1 de enero de 2026 y el 31 de diciembre de 2050.'
+const MSG_DUPLICADO = 'Este recibo ya está registrado (misma empresa y mismo código).'
 const MSG_MONTO = 'El monto debe ser mayor a cero y tener como máximo 10 dígitos enteros y 2 decimales.'
 const montoValido = (m) => Number.isFinite(m) && m > 0 && m <= LIMITE_MONTO
 
@@ -209,13 +194,55 @@ export function obtenerPrestamo(id) {
   return estado.prestamos.find((p) => p.id === id) ?? null
 }
 
-/** Busca un recibo con el mismo código (sin distinguir mayúsculas ni espacios). */
-export function buscarDuplicado(codigo, ignorarId = null) {
+// Recibos "sueltos": sin las cuotas de préstamo, cuyos códigos PRE-... son internos.
+const sueltos = (ignorarId) => estado.recibos.filter((r) => !r.prestamoId && r.id !== ignorarId)
+const mismoMes = (a, b) => String(a).slice(0, 7) === String(b).slice(0, 7)
+
+/**
+ * Busca un recibo ya registrado igual al que se quiere guardar: misma empresa y mismo código
+ * (sin distinguir mayúsculas ni espacios). En Servicio el código es el mismo todos los meses,
+ * así que además debe ser del mismo mes.
+ */
+export function buscarDuplicado({ tipo, empresa, codigo, fechaLimite }, ignorarId = null) {
   return (
-    estado.recibos.find(
-      (r) => r.id !== ignorarId && normalizar(r.codigo) === normalizar(codigo),
+    sueltos(ignorarId).find(
+      (r) =>
+        normalizar(r.empresa) === normalizar(empresa) &&
+        normalizar(r.codigo) === normalizar(codigo) &&
+        (tipo !== 'Servicio' || !fechaLimite || mismoMes(r.fechaLimite, fechaLimite)),
     ) ?? null
   )
+}
+
+/** Códigos de servicio que ya tiene registrados una empresa (el más reciente primero). */
+export function codigosDeEmpresa(empresa, ignorarId = null) {
+  const lista = []
+  sueltos(ignorarId)
+    .filter((r) => r.tipo === 'Servicio' && normalizar(r.empresa) === normalizar(empresa))
+    .sort((a, b) => (a.fechaLimite < b.fechaLimite ? 1 : -1))
+    .forEach((r) => {
+      if (!lista.some((c) => normalizar(c) === normalizar(r.codigo))) lista.push(r.codigo)
+    })
+  return lista
+}
+
+/**
+ * En Servicio el código identifica a la empresa y es el mismo todos los meses:
+ * - un código no puede pertenecer a dos empresas distintas;
+ * - si la empresa ya tiene código, un recibo nuevo debe usar ese mismo código.
+ * Devuelve el mensaje del conflicto, o null si todo está bien.
+ */
+export function conflictoDeCodigo({ tipo, empresa, codigo }, ignorarId = null) {
+  if (tipo !== 'Servicio') return null
+  const dueno = sueltos(ignorarId).find((r) => r.tipo === 'Servicio' && normalizar(r.codigo) === normalizar(codigo))
+  if (dueno && normalizar(dueno.empresa) !== normalizar(empresa)) {
+    return `El código ${String(codigo).trim()} ya pertenece a ${dueno.empresa}. Cada código de servicio identifica a una sola empresa.`
+  }
+  const propios = codigosDeEmpresa(empresa, ignorarId)
+  if (propios.length && !propios.some((c) => normalizar(c) === normalizar(codigo))) {
+    return `${String(empresa).trim()} ya tiene registrado el código ${propios[0]}. El código de un servicio es el mismo todos los meses.`
+  }
+  return null
 }
 
 /** Último medio de pago usado con una empresa (según pagos anteriores) o null. */
@@ -231,6 +258,9 @@ export function crearRecibo(datos) {
   if (!fechaEnRango(datos.fechaLimite)) return rechazar(MSG_FECHA, 'fecha')
   if (!codigoValido(datos.tipo, datos.codigo)) return rechazar('El código no tiene el formato correcto para este tipo de recibo.', 'codigo')
   if (!montoValido(datos.monto)) return rechazar(MSG_MONTO, 'monto')
+  const conflicto = conflictoDeCodigo(datos)
+  if (conflicto) return rechazar(conflicto, 'codigo')
+  if (buscarDuplicado(datos)) return rechazar(MSG_DUPLICADO, 'codigo')
   const id = nuevoId('r')
   const recibo = {
     id,
@@ -266,6 +296,9 @@ export function editarRecibo(id, cambios) {
   if (cambios.monto !== undefined && !montoValido(cambios.monto)) return rechazar(MSG_MONTO, 'monto')
   const nuevo = { ...actual, ...cambios, empresa: (cambios.empresa ?? actual.empresa).trim(), codigo: (cambios.codigo ?? actual.codigo).trim() }
   if (!codigoValido(nuevo.tipo, nuevo.codigo)) return rechazar('El código no tiene el formato correcto para este tipo de recibo.', 'codigo')
+  const conflicto = conflictoDeCodigo(nuevo, id)
+  if (conflicto) return rechazar(conflicto, 'codigo')
+  if (buscarDuplicado(nuevo, id)) return rechazar(MSG_DUPLICADO, 'codigo')
   const tocados = Object.keys(ETIQUETAS_CAMPO).filter((k) => (actual[k] ?? null) !== (nuevo[k] ?? null))
   const texto = tocados.length === 1
     ? `Editó ${ETIQUETAS_CAMPO[tocados[0]]} del recibo de ${nuevo.empresa}`
@@ -356,20 +389,6 @@ export function corregirPago(id, datos) {
   return corregido
 }
 
-/** Anula el pago: se borran sus datos y el recibo vuelve a Pendiente (o Vencido si ya pasó su fecha). */
-export function anularPago(id) {
-  const actual = obtenerRecibo(id)
-  if (!actual || actual.estado !== 'Pagado') return null
-  const anulado = { ...actual, estado: 'Pendiente', pago: null }
-  publicar({
-    ...estado,
-    recibos: estado.recibos.map((r) => (r.id === id ? anulado : r)),
-    historial: anotar(estado.historial, 'anular-pago', `Anuló el pago del recibo de ${actual.empresa}`),
-  })
-  borrarVoucher(actual.pago?.fotoPath) // al anular el pago también se borra su foto
-  return anulado
-}
-
 // ── Préstamos ───────────────────────────────────────────────────────────────
 /** Lista de cuotas que se crearían (se usa en la vista previa y al guardar). */
 export function calcularCuotas({ numCuotas, montoCuota, primeraFecha }) {
@@ -385,7 +404,7 @@ export function calcularCuotas({ numCuotas, montoCuota, primeraFecha }) {
 export function crearPrestamo(datos) {
   if (actor !== 'asistente') return rechazar('Solo el asistente puede registrar préstamos.') // los préstamos los gestiona el asistente
   if (!prestamoValido(datos)) return null
-  const correlativo = estado.prestamos.length + 1
+  const correlativo = Math.max(0, ...estado.prestamos.map((p) => p.correlativo)) + 1
   const codigoBase = `PRE-${String(correlativo).padStart(4, '0')}`
   const prestamo = {
     id: nuevoId('p'),
@@ -494,21 +513,3 @@ export function resumenPrestamo(prestamo, recibos = estado.recibos) {
   }
 }
 
-// ── Ingreso y pruebas ───────────────────────────────────────────────────────
-/** Registra "Ingresó al sistema" con el perfil que entró. */
-export function registrarIngreso(perfil) {
-  definirActor(perfil)
-}
-
-/** Solo para pruebas: vuelve a cargar los datos de ejemplo (y reinicia el historial). */
-export function reiniciarDatos() {
-  publicar(crearDatosEjemplo())
-}
-
-/** Borra todo el historial de acciones sin tocar recibos ni préstamos. */
-export function limpiarHistorial() {
-  publicar({
-    ...estado,
-    historial: [],
-  })
-}

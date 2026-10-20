@@ -1,19 +1,18 @@
 // HU-12: historial de acciones (gerente). Solo lectura: sin filtros, buscador ni botones.
 import { useMemo } from 'react'
-import { LogIn, FilePlus2, Pencil, Trash2, Wallet, Landmark, History, Undo2 } from 'lucide-react'
+import { FilePlus2, Pencil, Trash2, Wallet, Landmark, History } from 'lucide-react'
 import { useDatos } from '../data/useDatos'
 import { Tarjeta, Vacio } from '../components/ui'
 import { fechaLarga, fechaLimaDeInstante, horaLima, hoyISO, nombreDia, sumarDias } from '../utils/fechas'
 
 const ICONOS = {
-  ingreso: [LogIn, 'bg-slate-900/[.05] text-suave'],
   crear: [FilePlus2, 'bg-brand/10 text-brand'],
   editar: [Pencil, 'bg-pend-bg text-pend-tx'],
   eliminar: [Trash2, 'bg-venc-bg text-venc-tx'],
   pago: [Wallet, 'bg-pag-bg text-pag-tx'],
   prestamo: [Landmark, 'bg-brand/10 text-brand'],
   'corregir-pago': [Pencil, 'bg-pend-bg text-pend-tx'],
-  'anular-pago': [Undo2, 'bg-venc-bg text-venc-tx'],
+  otro: [History, 'bg-slate-900/[.05] text-suave'],
 }
 
 function tituloDia(fecha, hoy) {
@@ -54,7 +53,7 @@ export default function HistorialPage() {
               <h2 className="mb-2 text-lg font-bold">{tituloDia(fecha, hoy)}</h2>
               <Tarjeta className="divide-y divide-borde">
                 {lista.map((e) => {
-                  const [Icono, clase] = ICONOS[e.accion] ?? ICONOS.ingreso
+                  const [Icono, clase] = ICONOS[e.accion] ?? ICONOS.otro
                   return (
                     <div key={e.id} className="flex items-center gap-3 p-3 sm:p-4">
                       <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-full ${clase}`}>

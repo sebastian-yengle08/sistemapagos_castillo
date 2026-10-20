@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useMemo, useState } from 'react'
 import { PIN_HASHES } from '../config/pins'
 import { hashPin } from '../utils/hash'
-import { definirActor, registrarIngreso } from '../data/store'
+import { definirActor } from '../data/store'
 
 const CLAVE_SESION = 'pagosCastillo.sesion'
 const AuthContext = createContext(null)
@@ -33,7 +33,7 @@ export function AuthProvider({ children }) {
     } catch {
       /* ignorar */
     }
-    registrarIngreso(encontrado)
+    definirActor(encontrado)
     setPerfil(encontrado)
     return true
   }, [])

@@ -3,8 +3,6 @@
 const LADO_MAXIMO = 1600
 const CALIDAD = 0.82
 
-export const TIPOS_IMAGEN = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif']
-
 function cargarImagen(archivo) {
   return new Promise((resolver, rechazar) => {
     const url = URL.createObjectURL(archivo)
