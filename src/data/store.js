@@ -11,7 +11,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { crearDatosEjemplo } from './seed'
 import { hayNube, leerNube, sincronizarNube, suscribirCambios, borrarVoucher, confirmarVersiones } from './persistencia'
-import { hoyISO, FECHA_MINIMA, fechaMaximaRecibo, fechaMaxima, fechaEnRango, formatoFecha, sumarMeses, partes, textoRangoFechas } from '../utils/fechas'
+import { hoyISO, FECHA_MINIMA, fechaMaximaRecibo, fechaMaxima, fechaEnRango, formatoFecha, sumarMeses, partes, textoRangoFechas, fechaLimaDeInstante } from '../utils/fechas'
 import { formatoSoles } from '../utils/dinero'
 import { PERFILES, MAX_CUOTAS, LIMITE_CUOTA, LIMITE_PRESTAMO, LIMITE_MONTO, NOMBRE_MIN, NOMBRE_MAX, DIAS_MAXIMOS_RECIBO } from '../config/constantes'
 import { codigoValido, limpiarNombre, sinTildes } from '../utils/validacion'
@@ -372,6 +372,53 @@ function fechaPagoValida(fecha) {
   return fechaEnRango(fecha, FECHA_MINIMA, hoyISO())
 }
 
+/** Primera cuota anterior del mismo préstamo que sigue sin pagarse (las cuotas se pagan en orden), o null. */
+export function cuotaPendienteAnterior(recibo) {
+  if (!recibo?.prestamoId) return null
+  const pendientes = estado.recibos.filter((r) => r.prestamoId === recibo.prestamoId && r.cuota < recibo.cuota && r.estado !== 'Pagado')
+  return pendientes.length ? Math.min(...pendientes.map((r) => r.cuota)) : null
+}
+
+/**
+ * Rango en que puede caer la fecha de pago de un recibo: no antes de que se registró el recibo
+ * ni (en cuotas) antes del pago de la cuota anterior, y no después de hoy ni (en cuotas) del
+ * pago de la cuota siguiente.
+ */
+export function rangoDePago(recibo) {
+  let min = FECHA_MINIMA
+  let motivoMin = 'inicio permitido'
+  let max = hoyISO()
+  let motivoMax = 'hoy'
+  if (recibo.creadoEn) {
+    const registro = fechaLimaDeInstante(recibo.creadoEn)
+    if (registro > min) {
+      min = registro
+      motivoMin = 'fecha en que se registró el recibo'
+    }
+  }
+  if (recibo.prestamoId) {
+    const vecina = (n) => estado.recibos.find((r) => r.prestamoId === recibo.prestamoId && r.cuota === n)
+    const anterior = vecina(recibo.cuota - 1)?.pago?.fecha
+    if (anterior && anterior > min) {
+      min = anterior
+      motivoMin = 'fecha de pago de la cuota anterior'
+    }
+    const siguiente = vecina(recibo.cuota + 1)?.pago?.fecha
+    if (siguiente && siguiente < max) {
+      max = siguiente
+      motivoMax = 'fecha de pago de la cuota siguiente'
+    }
+  }
+  return { min, max, motivoMin, motivoMax }
+}
+
+function errorDeFechaPago(recibo, fecha) {
+  const { min, max, motivoMin, motivoMax } = rangoDePago(recibo)
+  if (fecha < min) return `La fecha de pago no puede ser anterior al ${formatoFecha(min)} (${motivoMin}).`
+  if (fecha > max) return `La fecha de pago no puede ser posterior al ${formatoFecha(max)} (${motivoMax}).`
+  return null
+}
+
 /**
  * Registra el pago de un recibo. datos: { interes, fecha, medio, foto, fotoPath, fotoHash }.
  * En las cuotas de préstamo el monto pagado se calcula como cuota + mora/interés.
@@ -383,6 +430,10 @@ export function registrarPago(id, datos) {
   if (!actual) return rechazar('Este recibo ya no existe. Vuelve al calendario y actualiza la pantalla.')
   if (actual.estado === 'Pagado') return rechazar('Este recibo ya figura como pagado (puede haberse pagado desde otro dispositivo). Cierra esta ventana para ver su estado actual.')
   if (!fechaPagoValida(datos.fecha)) return rechazar('La fecha de pago debe estar entre el 1 de enero de 2026 y hoy.', 'fecha')
+  const anteriorPendiente = cuotaPendienteAnterior(actual)
+  if (anteriorPendiente) return rechazar(`Las cuotas se pagan en orden: primero hay que pagar la cuota ${anteriorPendiente} de este préstamo.`)
+  const errFecha = errorDeFechaPago(actual, datos.fecha)
+  if (errFecha) return rechazar(errFecha, 'fecha')
   const interes = actual.prestamoId ? Number(datos.interes ?? 0) : 0
   if (!Number.isFinite(interes) || interes < 0) return rechazar('La mora o interés debe ser un monto válido, mayor o igual a cero.', 'interes')
   if (interes > actual.monto) return rechazar('La mora o interés no puede ser mayor al monto de la cuota. Revisa que no tenga un dígito de más.', 'interes')
@@ -420,6 +471,9 @@ export function corregirPago(id, datos) {
   if (!actual) return rechazar('Este recibo ya no existe. Vuelve al calendario y actualiza la pantalla.')
   if (actual.estado !== 'Pagado') return rechazar('Este recibo ya no figura como pagado. Cierra esta ventana para ver su estado actual.')
   if (!fechaPagoValida(datos.fecha)) return rechazar('La fecha de pago debe estar entre el 1 de enero de 2026 y hoy.', 'fecha')
+  // Solo se revisa si la fecha cambia: así se pueden corregir la foto o el medio de pagos antiguos
+  const errFecha = datos.fecha !== actual.pago.fecha ? errorDeFechaPago(actual, datos.fecha) : null
+  if (errFecha) return rechazar(errFecha, 'fecha')
   const fotoNueva = (datos.foto ?? null) !== (actual.pago.foto ?? null)
   const huellaFoto = fotoNueva ? (datos.fotoHash ?? null) : (actual.pago.fotoHash ?? null)
   if (fotoNueva) {

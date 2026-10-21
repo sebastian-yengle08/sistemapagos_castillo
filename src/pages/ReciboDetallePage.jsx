@@ -6,7 +6,7 @@ import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, CheckCircle2, Pencil, Trash2, Wallet, FileX, Banknote, ZoomIn } from 'lucide-react'
 import { useDatos } from '../data/useDatos'
 import { useAuth } from '../context/AuthContext'
-import { eliminarRecibo } from '../data/store'
+import { cuotaPendienteAnterior, eliminarRecibo } from '../data/store'
 import { urlFotoValida } from '../data/persistencia'
 import { Boton, Insignia, Tarjeta, Ventana, Vacio } from '../components/ui'
 import RegistrarPagoModal from '../components/RegistrarPagoModal'
@@ -61,6 +61,7 @@ export default function ReciboDetallePage() {
   const esAsistente = perfil === 'asistente'
   const esCuota = !!r.prestamoId
   const pagado = r.estado === 'Pagado'
+  const cuotaPrevia = !pagado ? cuotaPendienteAnterior(r) : null // las cuotas se pagan en orden
   const interes = esCuota ? interesCuota(r) : 0
   const dias = diasEntre(hoy, r.fechaLimite)
   const nota = estado === 'Vencido' ? `Venció hace ${-dias} ${-dias === 1 ? 'día' : 'días'}` : estado === 'Pendiente' ? (dias === 0 ? 'Vence hoy' : `Vence en ${dias} ${dias === 1 ? 'día' : 'días'}`) : null
@@ -134,7 +135,12 @@ export default function ReciboDetallePage() {
       {/* Acciones del asistente según el estado */}
       {esAsistente && (
         <div className="mt-5 flex flex-col gap-3">
-          {!pagado && (
+          {!pagado && cuotaPrevia && (
+            <p className="flex items-center gap-2 rounded-xl border border-pend-bd bg-pend-bg p-3 text-sm font-semibold text-pend-tx">
+              <Banknote size={18} aria-hidden="true" /> Primero hay que pagar la cuota {cuotaPrevia} de este préstamo.
+            </p>
+          )}
+          {!pagado && !cuotaPrevia && (
             <Boton variante="primario" grande onClick={() => setPagando(true)}>
               <Wallet size={22} aria-hidden="true" /> Registrar pago
             </Boton>

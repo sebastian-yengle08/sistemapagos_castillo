@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Camera, CheckCircle2, ImagePlus, Loader2 } from 'lucide-react'
 import { Boton, Campo, Chip, Ventana, claseInput } from './ui'
 import { MEDIOS } from '../config/constantes'
-import { buscarFotoRepetida, corregirPago, motivoRechazo, registrarPago, ultimoMedioDeEmpresa } from '../data/store'
+import { buscarFotoRepetida, corregirPago, motivoRechazo, rangoDePago, registrarPago, ultimoMedioDeEmpresa } from '../data/store'
 import { borrarVoucher, subirVoucher } from '../data/persistencia'
 import { comprimirImagen, hashBlob } from '../utils/imagen'
 import { MAX_ARCHIVO_MB } from '../config/constantes'
@@ -35,7 +35,8 @@ export default function RegistrarPagoModal({ recibo, modo = 'registrar', onCerra
   const [listo, setListo] = useState(false)
   const [guardando, setGuardando] = useState(false)
   const hoy = hoyISO() // fecha de hoy en Lima: la fecha de pago no puede ser futura
-  const fechaMinima = FECHA_MINIMA // la fecha de pago no puede ser anterior a 2026
+  const rango = rangoDePago(recibo) // no antes del registro del recibo / pago de la cuota anterior, ni después de hoy
+  const fechaMinima = rango.min
 
   // Monto pagado = monto de la cuota/recibo + mora/interés. Siempre es calculado.
   const montoBase = Number(recibo.monto) || 0
@@ -107,7 +108,7 @@ export default function RegistrarPagoModal({ recibo, modo = 'registrar', onCerra
     else if (agregarInteres && interesNum > montoBase) e.interes = 'La mora o interés no puede ser mayor al monto de la cuota. Revisa que no tenga un dígito de más.'
     if (!fecha) e.fecha = 'Elige la fecha de pago.'
     else if (fecha > hoy) e.fecha = 'La fecha de pago no puede ser posterior a hoy.'
-    else if (fecha < fechaMinima) e.fecha = 'La fecha de pago no puede ser anterior al 1 de enero de 2026.'
+    else if (fecha < FECHA_MINIMA) e.fecha = 'La fecha de pago no puede ser anterior al 1 de enero de 2026.'
     if (!medio) e.medio = 'Elige cómo se pagó.'
     if (!vista) e.foto = 'Sube la foto del voucher.'
     setErrores(e)
@@ -194,7 +195,7 @@ export default function RegistrarPagoModal({ recibo, modo = 'registrar', onCerra
               id="pago-fecha"
               type="date"
               min={fechaMinima}
-              max={hoy}
+              max={rango.max}
               value={fecha}
               onChange={(e) => setFecha(e.target.value)}
               className={claseInput(errores.fecha)}
