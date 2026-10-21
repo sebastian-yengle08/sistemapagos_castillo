@@ -103,7 +103,7 @@ export default function ReciboDetallePage() {
         {nota && <p className={`mt-1 font-semibold ${estado === 'Vencido' ? 'text-venc-tx' : 'text-pend-tx'}`}>{nota}</p>}
 
         <dl className="mt-4">
-          <Dato etiqueta={r.tipo === 'Impuesto' ? 'Período tributario' : 'Fecha límite'}>{formatoFecha(r.fechaLimite)}</Dato>
+          <Dato etiqueta="Fecha límite">{formatoFecha(r.fechaLimite)}</Dato>
           <Dato etiqueta="Tipo">{r.tipo}</Dato>
           {esCuota && <Dato etiqueta="Cuota de préstamo">{r.cuota}</Dato>}
         </dl>

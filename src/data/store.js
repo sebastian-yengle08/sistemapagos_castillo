@@ -333,8 +333,9 @@ export function editarRecibo(id, cambios) {
     if (errNombre) return rechazar(errNombre, 'empresa')
   }
   const fechaMax = fechaMaximaRecibo()
-  if (cambios.fechaLimite !== undefined && !fechaEnRango(cambios.fechaLimite, FECHA_MINIMA, fechaMax) && cambios.fechaLimite !== actual.fechaLimite) {
-    return rechazar(`La fecha límite debe estar ${textoRangoFechas(fechaMax)} (hoy + ${DIAS_MAXIMOS_RECIBO} días).`, 'fecha')
+  // Una fecha nueva debe estar entre hoy y hoy + 40 días; solo se puede conservar la actual (aunque ya haya pasado)
+  if (cambios.fechaLimite !== undefined && !fechaEnRango(cambios.fechaLimite, hoyISO(), fechaMax) && cambios.fechaLimite !== actual.fechaLimite) {
+    return rechazar(`La fecha límite no puede ser anterior a hoy ni posterior a ${DIAS_MAXIMOS_RECIBO} días: debe estar entre el ${formatoFecha(hoyISO())} y el ${formatoFecha(fechaMax)}.`, 'fecha')
   }
   if (cambios.monto !== undefined && !montoValido(cambios.monto)) return rechazar(MSG_MONTO, 'monto')
   const nuevo = { ...actual, ...cambios, empresa: limpiarNombre(cambios.empresa ?? actual.empresa), codigo: (cambios.codigo ?? actual.codigo).trim() }

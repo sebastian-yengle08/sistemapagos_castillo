@@ -6,7 +6,7 @@ import { Boton, Campo, Chip, Tarjeta, Ventana, claseInput } from '../components/
 import { TIPOS, LIMITE_MONTO, NOMBRE_MIN, NOMBRE_MAX, DIAS_MAXIMOS_RECIBO } from '../config/constantes'
 import { buscarDuplicado, crearRecibo, editarRecibo, motivoRechazo, obtenerRecibo } from '../data/store'
 import { useDatos } from '../data/useDatos'
-import { formatoFecha, hoyISO, FECHA_MINIMA, fechaMaximaRecibo, fechaEnRango, textoRangoFechas } from '../utils/fechas'
+import { formatoFecha, hoyISO, fechaMaximaRecibo, fechaEnRango } from '../utils/fechas'
 import { formatoSoles, leerMonto } from '../utils/dinero'
 import { soloLetras, soloLetrasNumeros, soloMontoCuota, soloCodigo, soloDigitos, soloAlfanumerico, codigoValido, limpiarNombre, errorDeRuc } from '../utils/validacion'
 
@@ -26,9 +26,9 @@ export default function ReciboFormPage() {
   const { state } = useLocation()
   const origen = state?.origen // pantalla de la que se vino (se conserva al volver al detalle)
   const hoy = hoyISO() // fecha de hoy en Lima
-  // Un recibo nuevo vence desde hoy hasta 40 días después. Al editar se conserva la
-  // posibilidad de mantener la fecha original de un recibo antiguo.
-  const fechaMinima = editando ? FECHA_MINIMA : hoy
+  // La fecha límite va desde hoy hasta 40 días después, tanto al crear como al editar. Al editar
+  // solo se puede conservar la fecha original (aunque ya haya pasado); nunca poner una pasada nueva.
+  const fechaMinima = hoy
   const fechaMax = fechaMaximaRecibo() // hoy + 40 días
   const [original] = useState(() => (id ? obtenerRecibo(id) : null))
   const { recibos } = useDatos()
@@ -55,7 +55,7 @@ export default function ReciboFormPage() {
   const esProveedor = tipo === 'Proveedor'
   const esImpuesto = tipo === 'Impuesto'
   const etiquetaEmpresa = esProveedor ? 'Razón Social / RUC' : esImpuesto ? 'Entidad' : 'Empresa'
-  const etiquetaFecha = esImpuesto ? 'Período tributario (fecha límite)' : 'Fecha límite'
+  const etiquetaFecha = 'Fecha límite'
   const placeholderEmpresa = esProveedor ? 'Ej.: Distribuidora ABC 20123456789' : esImpuesto ? 'Ej.: SUNAT, Municipalidad' : 'Ej.: SEDALIB'
   const ayudaEmpresa = esProveedor
     ? 'Solo letras, números y espacios. Si escribes el RUC, debe tener 11 dígitos y ser válido.'
@@ -116,9 +116,7 @@ export default function ReciboFormPage() {
     }
     if (!fecha) e.fecha = 'Elige la fecha límite de pago.'
     else if (!fechaEnRango(fecha, fechaMinima, fechaMax) && !(editando && fecha === original.fechaLimite)) {
-      e.fecha = editando
-        ? `La fecha límite debe estar ${textoRangoFechas(fechaMax)} (hoy + ${DIAS_MAXIMOS_RECIBO} días).`
-        : `La fecha límite debe estar entre hoy (${formatoFecha(fechaMinima)}) y el ${formatoFecha(fechaMax)} (${DIAS_MAXIMOS_RECIBO} días desde hoy).`
+      e.fecha = `La fecha límite no puede ser anterior a hoy ni posterior a ${DIAS_MAXIMOS_RECIBO} días: debe estar entre el ${formatoFecha(fechaMinima)} y el ${formatoFecha(fechaMax)}.`
     }
     const m = leerMonto(monto)
     if (monto.trim() === '') e.monto = 'Escribe el monto total.'
@@ -234,7 +232,7 @@ export default function ReciboFormPage() {
             error={errores.fecha}
             ayuda={
               editando
-                ? `Este recibo puede conservar su fecha. Si la cambias, máximo ${formatoFecha(fechaMax)} (hoy + ${DIAS_MAXIMOS_RECIBO} días).`
+                ? `Puedes conservar la fecha actual. Si la cambias, desde hoy (${formatoFecha(fechaMinima)}) hasta el ${formatoFecha(fechaMax)}.`
                 : `Desde hoy (${formatoFecha(fechaMinima)}) hasta el ${formatoFecha(fechaMax)} (${DIAS_MAXIMOS_RECIBO} días).`
             }
           >
