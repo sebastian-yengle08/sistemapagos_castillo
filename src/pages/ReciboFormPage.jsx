@@ -84,7 +84,9 @@ export default function ReciboFormPage() {
             ? ['Este recibo ya no existe', 'Se eliminó desde otro dispositivo mientras lo editabas.']
             : enVivo.estado === 'Pagado'
               ? ['Este recibo se acaba de pagar', 'Otro dispositivo lo pagó mientras lo editabas, así que ya no se puede editar. Corrige el pago desde su detalle.']
-              : null
+              : enVivo.bloqueado
+                ? ['El pago de este recibo está bloqueado', 'El gerente lo bloqueó, por eso no se puede editar. Espera a que quite el bloqueo.']
+                : null
   if (bloqueo) {
     return (
       <Tarjeta className="mx-auto max-w-lg p-6 text-center">

@@ -325,6 +325,7 @@ export function editarRecibo(id, cambios) {
   if (!actual) return rechazar('Este recibo ya no existe. Vuelve al calendario y actualiza la pantalla.')
   if (actual.prestamoId) return rechazar('Las cuotas de un préstamo no se pueden editar.')
   if (actual.estado === 'Pagado') return rechazar('Este recibo ya fue pagado (puede haberse pagado desde otro dispositivo), por eso no se puede editar. Vuelve al detalle para ver su estado actual.')
+  if (actual.bloqueado) return rechazar('El gerente bloqueó el pago de este recibo, por eso no se puede editar. Espera a que quite el bloqueo.')
   // El tipo de un recibo no cambia: cada tipo tiene su propio formato de código y sus reglas
   if (cambios.tipo !== undefined && cambios.tipo !== actual.tipo) return rechazar('El tipo de un recibo no se puede cambiar. Elimina el recibo y regístralo de nuevo con el tipo correcto.')
   if (cambios.empresa !== undefined) {
@@ -625,6 +626,8 @@ export function editarPrestamo(id, datos) {
   if (!esAsistente()) return rechazar('Solo el asistente puede editar préstamos.')
   if (datos.numCuotas !== actual.numCuotas) return rechazar('El número de cuotas no se puede cambiar al editar un préstamo.', 'num')
   const cuotasActuales = estado.recibos.filter((r) => r.prestamoId === id)
+  const bloqueada = cuotasActuales.find((r) => r.bloqueado && r.estado !== 'Pagado')
+  if (bloqueada) return rechazar(`El gerente bloqueó el pago de la cuota ${bloqueada.cuota}, por eso no se puede editar el préstamo. Espera a que quite el bloqueo.`)
   const hayPagadas = cuotasActuales.some((r) => r.estado === 'Pagado')
   const cuotaUnoPagada = cuotasActuales.some((r) => r.cuota === 1 && r.estado === 'Pagado')
   const primeraPendienteActual = cuotasActuales.filter((r) => r.estado !== 'Pagado').sort((a, b) => a.cuota - b.cuota)[0] ?? null

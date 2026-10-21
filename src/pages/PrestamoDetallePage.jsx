@@ -1,6 +1,6 @@
 // HU-08: detalle de un préstamo, con su tabla de cuotas. El asistente puede editarlo; el gerente solo lo consulta.
 import { Link, useLocation, useParams } from 'react-router-dom'
-import { ArrowLeft, CheckCircle2, Landmark, Pencil } from 'lucide-react'
+import { ArrowLeft, CheckCircle2, Landmark, Lock, Pencil } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useDatos } from '../data/useDatos'
 import { resumenPrestamo } from '../data/store'
@@ -27,6 +27,7 @@ export default function PrestamoDetallePage() {
   }
   const s = resumenPrestamo(p, recibos)
   const hoy = hoyISO()
+  const cuotaBloqueada = s.cuotas.find((c) => c.bloqueado && c.estado !== 'Pagado') // el gerente bloqueó su pago
 
   return (
     <div className="mx-auto max-w-3xl">
@@ -40,7 +41,12 @@ export default function PrestamoDetallePage() {
       )}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-bold sm:text-3xl">{p.entidad}</h1>
-        {perfil === 'asistente' && (
+        {perfil === 'asistente' && cuotaBloqueada && (
+          <p className="inline-flex items-center gap-2 rounded-xl border border-venc-bd bg-venc-bg px-4 py-2 text-sm font-semibold text-venc-tx">
+            <Lock size={16} aria-hidden="true" /> Cuota {cuotaBloqueada.cuota} bloqueada por el gerente: no se puede editar.
+          </p>
+        )}
+        {perfil === 'asistente' && !cuotaBloqueada && (
           <Link to={`/prestamos/${p.id}/editar`} className="inline-flex min-h-12 items-center gap-2 rounded-full border border-borde bg-slate-900/[.05] px-5 font-semibold hover:bg-slate-900/10">
             <Pencil size={18} aria-hidden="true" /> Editar préstamo
           </Link>

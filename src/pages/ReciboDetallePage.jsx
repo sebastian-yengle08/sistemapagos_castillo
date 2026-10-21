@@ -188,16 +188,15 @@ export default function ReciboDetallePage() {
             </Boton>
           )}
 
-          {!pagado && !esCuota && (
-            <div className={bloqueado ? 'grid gap-3' : 'grid grid-cols-2 gap-3'}>
+          {/* Con el pago bloqueado por el gerente no se puede hacer ninguna acción: ni pagar, ni editar, ni eliminar */}
+          {!pagado && !esCuota && !bloqueado && (
+            <div className="grid grid-cols-2 gap-3">
               <Boton onClick={() => navegar(`/recibos/${r.id}/editar`, { state: { origen } })}>
                 <Pencil size={18} aria-hidden="true" /> Editar
               </Boton>
-              {!bloqueado && (
-                <Boton onClick={() => setEliminando(true)} className="!text-venc-tx">
-                  <Trash2 size={18} aria-hidden="true" /> Eliminar
-                </Boton>
-              )}
+              <Boton onClick={() => setEliminando(true)} className="!text-venc-tx">
+                <Trash2 size={18} aria-hidden="true" /> Eliminar
+              </Boton>
             </div>
           )}
 
