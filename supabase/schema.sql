@@ -110,3 +110,26 @@ drop trigger if exists recibos_version   on public.recibos;
 drop trigger if exists prestamos_version on public.prestamos;
 create trigger recibos_version   before update on public.recibos   for each row execute function public.sumar_version();
 create trigger prestamos_version before update on public.prestamos for each row execute function public.sumar_version();
+
+-- Bloqueo de pagos: el gerente puede bloquearlos y el asistente no puede registrar ni corregir pagos
+-- hasta que se quite. La app lo respeta en pantalla y esta regla lo respalda en la base.
+create table if not exists public.ajustes (
+  clave       text primary key,
+  valor       jsonb not null,
+  actualizado timestamptz not null default now()
+);
+alter table public.ajustes enable row level security;
+drop policy if exists "prototipo ajustes" on public.ajustes;
+create policy "prototipo ajustes" on public.ajustes for all to anon using (true) with check (true);
+
+create or replace function public.impedir_pago_bloqueado() returns trigger
+language plpgsql as $$
+begin
+  if new.pago is distinct from old.pago
+     and coalesce((select (valor->>'activo')::boolean from public.ajustes where clave = 'bloqueo_pagos'), false) then
+    raise exception 'Los pagos están bloqueados por el gerente';
+  end if;
+  return new;
+end $$;
+drop trigger if exists recibos_bloqueo_pagos on public.recibos;
+create trigger recibos_bloqueo_pagos before update on public.recibos for each row execute function public.impedir_pago_bloqueado();

@@ -6,7 +6,7 @@ import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, CheckCircle2, Pencil, Trash2, Wallet, FileX, Banknote, ZoomIn } from 'lucide-react'
 import { useDatos } from '../data/useDatos'
 import { useAuth } from '../context/AuthContext'
-import { cuotaPendienteAnterior, eliminarRecibo } from '../data/store'
+import { cuotaPendienteAnterior, eliminarRecibo, pagosBloqueados } from '../data/store'
 import { urlFotoValida } from '../data/persistencia'
 import { Boton, Insignia, Tarjeta, Ventana, Vacio } from '../components/ui'
 import RegistrarPagoModal from '../components/RegistrarPagoModal'
@@ -61,6 +61,7 @@ export default function ReciboDetallePage() {
   const esAsistente = perfil === 'asistente'
   const esCuota = !!r.prestamoId
   const pagado = r.estado === 'Pagado'
+  const bloqueado = pagosBloqueados() // el gerente bloqueó los pagos
   const cuotaPrevia = !pagado ? cuotaPendienteAnterior(r) : null // las cuotas se pagan en orden
   const interes = esCuota ? interesCuota(r) : 0
   const dias = diasEntre(hoy, r.fechaLimite)
@@ -140,13 +141,13 @@ export default function ReciboDetallePage() {
               <Banknote size={18} aria-hidden="true" /> Primero hay que pagar la cuota {cuotaPrevia} de este préstamo.
             </p>
           )}
-          {!pagado && !cuotaPrevia && (
+          {!pagado && !cuotaPrevia && !bloqueado && (
             <Boton variante="primario" grande onClick={() => setPagando(true)}>
               <Wallet size={22} aria-hidden="true" /> Registrar pago
             </Boton>
           )}
 
-          {pagado && (
+          {pagado && !bloqueado && (
             <Boton onClick={() => setCorrigiendo(true)}>
               <Pencil size={18} aria-hidden="true" /> Corregir pago
             </Boton>

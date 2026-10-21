@@ -89,6 +89,13 @@ export async function leerNube() {
       data.forEach((f) => nuevas[t].set(f.id, f.version))
     }
   }
+  // Ajustes (bloqueo de pagos). Si la tabla aún no existe se ignora: la app sigue funcionando sin bloqueo compartido.
+  try {
+    const { data, error } = await nube.from('ajustes').select('valor').eq('clave', 'bloqueo_pagos').maybeSingle()
+    if (!error) salida.bloqueo = data?.valor ?? null
+  } catch {
+    /* sin tabla de ajustes */
+  }
   // Las versiones no se aplican solas: store.js las confirma (confirmarVersiones) solo cuando usa esta lectura
   Object.defineProperty(salida, '_versiones', { value: { nuevas, activa }, enumerable: false })
   return salida
@@ -164,6 +171,13 @@ export async function sincronizarNube(previo, nuevo) {
       versiones[t].set(x.id, data[0].version)
     }
   }
+  if (!mismo(previo.bloqueo ?? null, nuevo.bloqueo ?? null)) await guardarBloqueo(nuevo.bloqueo)
+}
+
+/** Guarda (o quita) el bloqueo de pagos. */
+async function guardarBloqueo(valor) {
+  const { error } = await nube.from('ajustes').upsert({ clave: 'bloqueo_pagos', valor: valor ?? { activo: false }, actualizado: new Date().toISOString() })
+  if (error) throw new Error('ajustes: ' + error.message + ' (¿falta ejecutar supabase/schema.sql?)')
 }
 
 let canalTiempoReal = null

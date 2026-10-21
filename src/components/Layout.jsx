@@ -8,6 +8,7 @@ import { useAuth } from '../context/AuthContext'
 import { useDatos } from '../data/useDatos'
 import { agruparAvisos } from '../utils/avisos'
 import { hoyISO } from '../utils/fechas'
+import BloqueoPagos from './BloqueoPagos'
 
 const MENU = {
   asistente: [
@@ -111,6 +112,7 @@ export default function Layout() {
       )}
 
       <main key={pathname} className="mx-auto max-w-[1280px] px-4 pb-28 pt-5 lg:px-8 lg:pb-10 lg:pt-8">
+        <BloqueoPagos />
         <Outlet />
       </main>
 
