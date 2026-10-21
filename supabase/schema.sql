@@ -111,25 +111,21 @@ drop trigger if exists prestamos_version on public.prestamos;
 create trigger recibos_version   before update on public.recibos   for each row execute function public.sumar_version();
 create trigger prestamos_version before update on public.prestamos for each row execute function public.sumar_version();
 
--- Bloqueo de pagos: el gerente puede bloquearlos y el asistente no puede registrar ni corregir pagos
--- hasta que se quite. La app lo respeta en pantalla y esta regla lo respalda en la base.
-create table if not exists public.ajustes (
-  clave       text primary key,
-  valor       jsonb not null,
-  actualizado timestamptz not null default now()
-);
-alter table public.ajustes enable row level security;
-drop policy if exists "prototipo ajustes" on public.ajustes;
-create policy "prototipo ajustes" on public.ajustes for all to anon using (true) with check (true);
+-- Bloqueo de pago por recibo: el gerente puede bloquear el pago de un recibo pendiente y el asistente
+-- no puede pagarlo hasta que se quite el bloqueo. La app lo respeta en pantalla y esta regla lo respalda.
+alter table public.recibos add column if not exists bloqueado boolean not null default false;
+
+-- Limpieza: se probó un bloqueo general (todos los pagos) que ya no se usa.
+drop trigger if exists recibos_bloqueo_pagos on public.recibos;
+drop function if exists public.impedir_pago_bloqueado();
+drop table if exists public.ajustes;
 
 create or replace function public.impedir_pago_bloqueado() returns trigger
 language plpgsql as $$
 begin
-  if new.pago is distinct from old.pago
-     and coalesce((select (valor->>'activo')::boolean from public.ajustes where clave = 'bloqueo_pagos'), false) then
-    raise exception 'Los pagos están bloqueados por el gerente';
+  if old.bloqueado and new.pago is distinct from old.pago then
+    raise exception 'El gerente bloqueó el pago de este recibo';
   end if;
   return new;
 end $$;
-drop trigger if exists recibos_bloqueo_pagos on public.recibos;
 create trigger recibos_bloqueo_pagos before update on public.recibos for each row execute function public.impedir_pago_bloqueado();

@@ -39,10 +39,13 @@ const mapas = {
     aFila: (r) => ({
       id: r.id, tipo: r.tipo, empresa: r.empresa, codigo: r.codigo, fecha_limite: r.fechaLimite, monto: r.monto,
       estado: r.estado, pago: r.pago ?? null, prestamo_id: r.prestamoId ?? null, cuota: r.cuota ?? null, creado_en: r.creadoEn,
+      // Solo se envía si se usó: así, mientras la base no tenga la columna `bloqueado`, nada más se rompe
+      ...(r.bloqueado !== undefined ? { bloqueado: r.bloqueado } : {}),
     }),
     deFila: (f) => ({
       id: f.id, tipo: f.tipo, empresa: f.empresa, codigo: f.codigo, fechaLimite: f.fecha_limite, monto: Number(f.monto),
       estado: f.estado, pago: f.pago ?? null, prestamoId: f.prestamo_id ?? null, cuota: f.cuota ?? null, creadoEn: iso(f.creado_en),
+      ...('bloqueado' in f ? { bloqueado: !!f.bloqueado } : {}),
     }),
   },
   prestamos: {
@@ -88,13 +91,6 @@ export async function leerNube() {
       if (data.length) activa[t] = 'version' in data[0]
       data.forEach((f) => nuevas[t].set(f.id, f.version))
     }
-  }
-  // Ajustes (bloqueo de pagos). Si la tabla aún no existe se ignora: la app sigue funcionando sin bloqueo compartido.
-  try {
-    const { data, error } = await nube.from('ajustes').select('valor').eq('clave', 'bloqueo_pagos').maybeSingle()
-    if (!error) salida.bloqueo = data?.valor ?? null
-  } catch {
-    /* sin tabla de ajustes */
   }
   // Las versiones no se aplican solas: store.js las confirma (confirmarVersiones) solo cuando usa esta lectura
   Object.defineProperty(salida, '_versiones', { value: { nuevas, activa }, enumerable: false })
@@ -171,13 +167,6 @@ export async function sincronizarNube(previo, nuevo) {
       versiones[t].set(x.id, data[0].version)
     }
   }
-  if (!mismo(previo.bloqueo ?? null, nuevo.bloqueo ?? null)) await guardarBloqueo(nuevo.bloqueo)
-}
-
-/** Guarda (o quita) el bloqueo de pagos. */
-async function guardarBloqueo(valor) {
-  const { error } = await nube.from('ajustes').upsert({ clave: 'bloqueo_pagos', valor: valor ?? { activo: false }, actualizado: new Date().toISOString() })
-  if (error) throw new Error('ajustes: ' + error.message + ' (¿falta ejecutar supabase/schema.sql?)')
 }
 
 let canalTiempoReal = null

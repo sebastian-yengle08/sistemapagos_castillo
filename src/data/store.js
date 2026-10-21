@@ -13,6 +13,7 @@ import { crearDatosEjemplo } from './seed'
 import { hayNube, leerNube, sincronizarNube, suscribirCambios, borrarVoucher, confirmarVersiones } from './persistencia'
 import { hoyISO, FECHA_MINIMA, fechaMaximaRecibo, fechaMaxima, fechaEnRango, formatoFecha, sumarMeses, partes, textoRangoFechas, fechaLimaDeInstante } from '../utils/fechas'
 import { formatoSoles } from '../utils/dinero'
+import { estadoVisible } from '../utils/estado'
 import { PERFILES, MAX_CUOTAS, LIMITE_CUOTA, LIMITE_PRESTAMO, LIMITE_MONTO, NOMBRE_MIN, NOMBRE_MAX, DIAS_MAXIMOS_RECIBO } from '../config/constantes'
 import { codigoValido, limpiarNombre, sinTildes } from '../utils/validacion'
 
@@ -82,7 +83,7 @@ export async function iniciarDatos() {
 }
 
 // Huella de los datos (sin importar el orden) para saber si algo cambió de verdad
-const huella = (e) => JSON.stringify([[e.bloqueo ?? null], ...[e.recibos, e.prestamos, e.historial].map((l) => [...l].sort((a, b) => (a.id < b.id ? -1 : 1)))])
+const huella = (e) => JSON.stringify([e.recibos, e.prestamos, e.historial].map((l) => [...l].sort((a, b) => (a.id < b.id ? -1 : 1))))
 let version = 0 // sube con cada cambio local: así una lectura vieja nunca pisa un cambio recién hecho
 
 /** Vuelve a leer Supabase (cambios hechos desde otros dispositivos). Espera a los envíos pendientes. */
@@ -211,23 +212,6 @@ export const motivoRechazo = () => ultimoRechazo ?? { mensaje: 'No se pudo guard
 /** Las acciones de registro (recibos, pagos y préstamos) son del asistente; el gerente solo consulta. */
 const esAsistente = () => actor === 'asistente'
 const SOLO_ASISTENTE = 'Solo el asistente puede registrar y modificar datos. El gerente solo consulta.'
-
-const MSG_PAGOS_BLOQUEADOS = 'El gerente bloqueó los pagos. No puedes registrar ni corregir pagos hasta que quite el bloqueo.'
-/** true mientras el gerente tenga los pagos bloqueados. */
-export const pagosBloqueados = () => !!estado.bloqueo?.activo
-
-/** El gerente bloquea (true) o desbloquea (false) los pagos. Mientras estén bloqueados, el asistente no paga. */
-export function bloquearPagos(activo) {
-  if (actor !== 'gerente') return rechazar('Solo el gerente puede bloquear o quitar el bloqueo de los pagos.')
-  if (pagosBloqueados() === !!activo) return estado.bloqueo ?? { activo: false }
-  const bloqueo = { activo: !!activo, desde: new Date().toISOString() }
-  publicar({
-    ...estado,
-    bloqueo,
-    historial: anotar(estado.historial, 'bloqueo', activo ? 'Bloqueó los pagos: el asistente no puede registrar ni corregir pagos' : 'Quitó el bloqueo de pagos'),
-  })
-  return bloqueo
-}
 
 const MSG_DUPLICADO = 'Este código ya está registrado. Cada recibo debe tener un código distinto.'
 const MSG_MONTO = 'El monto debe ser mayor a cero y tener como máximo 10 dígitos enteros y 2 decimales.'
@@ -376,12 +360,38 @@ export function eliminarRecibo(id) {
   const actual = obtenerRecibo(id)
   // No se eliminan cuotas de préstamo ni recibos pagados
   if (!actual || actual.prestamoId || actual.estado === 'Pagado') return false
+  if (actual.bloqueado) {
+    rechazar('El gerente bloqueó el pago de este recibo, por eso no se puede eliminar.')
+    return false
+  }
   publicar({
     ...estado,
     recibos: estado.recibos.filter((r) => r.id !== id),
     historial: anotar(estado.historial, 'eliminar', `Eliminó el recibo de ${actual.empresa} (${actual.codigo}) por ${formatoSoles(actual.monto)}`),
   })
   return true
+}
+
+/**
+ * El gerente bloquea (true) o desbloquea (false) el pago de un recibo o cuota pendiente.
+ * Mientras esté bloqueado, el asistente no puede pagarlo ni eliminarlo.
+ */
+export function bloquearRecibo(id, activo) {
+  if (actor !== 'gerente') return rechazar('Solo el gerente puede bloquear o desbloquear pagos.')
+  const actual = obtenerRecibo(id)
+  if (!actual) return rechazar('Este recibo ya no existe. Vuelve al calendario y actualiza la pantalla.')
+  if (actual.estado === 'Pagado') return rechazar('Este recibo ya figura como pagado: no se puede bloquear su pago.')
+  // Solo se bloquean pagos pendientes: uno vencido no se puede bloquear (quitar un bloqueo sí se puede siempre)
+  if (activo && estadoVisible(actual, hoyISO()) !== 'Pendiente') return rechazar('Solo se puede bloquear el pago de recibos pendientes. Este recibo ya está vencido.')
+  if (!!actual.bloqueado === !!activo) return actual // no hay nada que cambiar
+  const nuevo = { ...actual, bloqueado: !!activo }
+  const de = actual.prestamoId ? `de la cuota ${actual.cuota} del préstamo de ${actual.empresa}` : `del recibo de ${actual.empresa} (${actual.codigo})`
+  publicar({
+    ...estado,
+    recibos: estado.recibos.map((r) => (r.id === id ? nuevo : r)),
+    historial: anotar(estado.historial, 'bloqueo', activo ? `Bloqueó el pago ${de}` : `Quitó el bloqueo del pago ${de}`),
+  })
+  return nuevo
 }
 
 /** La fecha de pago debe estar dentro del rango y no puede ser futura. */
@@ -443,11 +453,11 @@ function errorDeFechaPago(recibo, fecha) {
  */
 export function registrarPago(id, datos) {
   if (!esAsistente()) return rechazar(SOLO_ASISTENTE)
-  if (pagosBloqueados()) return rechazar(MSG_PAGOS_BLOQUEADOS)
   const actual = obtenerRecibo(id)
   if (!actual) return rechazar('Este recibo ya no existe. Vuelve al calendario y actualiza la pantalla.')
   if (actual.estado === 'Pagado') return rechazar('Este recibo ya figura como pagado (puede haberse pagado desde otro dispositivo). Cierra esta ventana para ver su estado actual.')
   if (!fechaPagoValida(datos.fecha)) return rechazar('La fecha de pago debe estar entre el 1 de enero de 2026 y hoy.', 'fecha')
+  if (actual.bloqueado) return rechazar('El gerente bloqueó el pago de este recibo. No se puede pagar hasta que quite el bloqueo.')
   const anteriorPendiente = cuotaPendienteAnterior(actual)
   if (anteriorPendiente) return rechazar(`Las cuotas se pagan en orden: primero hay que pagar la cuota ${anteriorPendiente} de este préstamo.`)
   const errFecha = errorDeFechaPago(actual, datos.fecha)
@@ -485,7 +495,6 @@ export function registrarPago(id, datos) {
 /** Corrige la fecha, el medio y la foto de un pago ya registrado. El monto y la mora no se modifican. */
 export function corregirPago(id, datos) {
   if (!esAsistente()) return rechazar(SOLO_ASISTENTE)
-  if (pagosBloqueados()) return rechazar(MSG_PAGOS_BLOQUEADOS)
   const actual = obtenerRecibo(id)
   if (!actual) return rechazar('Este recibo ya no existe. Vuelve al calendario y actualiza la pantalla.')
   if (actual.estado !== 'Pagado') return rechazar('Este recibo ya no figura como pagado. Cierra esta ventana para ver su estado actual.')
