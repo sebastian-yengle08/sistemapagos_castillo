@@ -55,7 +55,6 @@ export default function ReciboFormPage() {
     : 'Solo letras y signos de nombre. No se permiten números.'
   const limpiarEmpresa = esProveedor ? soloLetrasNumeros : soloLetras
 
-  const ayudaCodigo = `Hasta ${CODIGO_MAX} caracteres: letras, números y - _ / . No se puede repetir.`
   const placeholderCodigo = esProveedor ? 'Ej.: F001000231' : esImpuesto ? 'Ej.: 0621' : 'Ej.: 20250412'
 
   // Las cuotas de préstamo y los recibos pagados no se editan; tampoco uno que otro dispositivo ya pagó o eliminó
@@ -212,7 +211,7 @@ export default function ReciboFormPage() {
             className={claseInput(errores.titular)}
           />
         </Campo>
-        <Campo etiqueta="Código del recibo" id="f-codigo" error={errores.codigo} ayuda={ayudaCodigo}>
+        <Campo etiqueta="Código del recibo" id="f-codigo" error={errores.codigo}>
           <input
             id="f-codigo"
             autoComplete="off"
@@ -228,11 +227,6 @@ export default function ReciboFormPage() {
             etiqueta={etiquetaFecha}
             id="f-fecha"
             error={errores.fecha}
-            ayuda={
-              editando
-                ? `Desde el ${formatoFecha(fechaMinima)} hasta el ${formatoFecha(fechaMax)}. Una fecha pasada deja el recibo como Vencido.`
-                : `Desde el ${formatoFecha(fechaMinima)} hasta el ${formatoFecha(fechaMax)} (hoy + ${DIAS_MAXIMOS_RECIBO} días). Una fecha pasada deja el recibo como Vencido.`
-            }
           >
             <input id="f-fecha" type="date" min={fechaMinima} max={fechaMax} value={fecha} onChange={(e) => setFecha(e.target.value)} className={claseInput(errores.fecha)} />
           </Campo>
