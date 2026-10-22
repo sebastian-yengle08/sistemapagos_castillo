@@ -11,7 +11,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { crearDatosEjemplo } from './seed'
 import { hayNube, leerNube, sincronizarNube, suscribirCambios, borrarVoucher, confirmarVersiones } from './persistencia'
-import { hoyISO, FECHA_MINIMA, fechaMaximaRecibo, fechaMaxima, fechaEnRango, formatoFecha, sumarMeses, partes, textoRangoFechas, fechaLimaDeInstante } from '../utils/fechas'
+import { hoyISO, FECHA_MINIMA, fechaMaximaRecibo, fechaMaxima, fechaEnRango, formatoFecha, sumarMeses, partes, textoRangoFechas } from '../utils/fechas'
 import { formatoSoles } from '../utils/dinero'
 import { PERFILES, MAX_CUOTAS, LIMITE_CUOTA, LIMITE_PRESTAMO, LIMITE_MONTO, NOMBRE_MIN, NOMBRE_MAX, DIAS_MAXIMOS_RECIBO, CODIGO_MAX } from '../config/constantes'
 import { codigoValido, limpiarNombre, sinTildes } from '../utils/validacion'
@@ -393,22 +393,15 @@ export function cuotaPendienteAnterior(recibo) {
 }
 
 /**
- * Rango en que puede caer la fecha de pago de un recibo: no antes de que se registró el recibo
- * ni (en cuotas) antes del pago de la cuota anterior, y no después de hoy ni (en cuotas) del
- * pago de la cuota siguiente.
+ * Rango en que puede caer la fecha de pago de un recibo: desde el 1 de enero de 2026 hasta hoy.
+ * En las cuotas de un préstamo además no puede ser antes del pago de la cuota anterior ni
+ * después del pago de la cuota siguiente.
  */
 export function rangoDePago(recibo) {
   let min = FECHA_MINIMA
   let motivoMin = 'inicio permitido'
   let max = hoyISO()
   let motivoMax = 'hoy'
-  if (recibo.creadoEn) {
-    const registro = fechaLimaDeInstante(recibo.creadoEn)
-    if (registro > min) {
-      min = registro
-      motivoMin = 'fecha en que se registró el recibo'
-    }
-  }
   if (recibo.prestamoId) {
     const vecina = (n) => estado.recibos.find((r) => r.prestamoId === recibo.prestamoId && r.cuota === n)
     const anterior = vecina(recibo.cuota - 1)?.pago?.fecha
@@ -421,6 +414,12 @@ export function rangoDePago(recibo) {
       max = siguiente
       motivoMax = 'fecha de pago de la cuota siguiente'
     }
+  }
+  // Si el reloj de algún dispositivo estaba adelantado o atrasado al registrar, el mínimo podría quedar
+  // después del máximo y no habría ninguna fecha elegible: en ese caso se deja al menos el día máximo.
+  if (min > max) {
+    min = max
+    motivoMin = motivoMax
   }
   return { min, max, motivoMin, motivoMax }
 }

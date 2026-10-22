@@ -4,9 +4,25 @@ import { ZONA, ANIOS_MAXIMOS, DIAS_MAXIMOS_RECIBO } from '../config/constantes.j
 
 const pad = (n) => String(n).padStart(2, '0')
 
+/**
+ * Fecha (aaaa-mm-dd) en Lima de un instante. Se arma con las PARTES del año, mes y día: antes se usaba el
+ * formato de texto de un idioma ('en-CA'), que no es igual en todos los navegadores y celulares y hacía que
+ * en algunos dispositivos "hoy" saliera en otro formato y se rechazaran fechas válidas.
+ */
+function fechaLima(instante) {
+  try {
+    const p = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: ZONA, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(instante).map((x) => [x.type, x.value]))
+    if (/^\d{4}$/.test(p.year) && /^\d{2}$/.test(p.month) && /^\d{2}$/.test(p.day)) return `${p.year}-${p.month}-${p.day}`
+  } catch {
+    /* el navegador no conoce la zona horaria: se calcula a mano abajo */
+  }
+  // Lima es UTC-5 todo el año (sin horario de verano)
+  return new Date(instante.getTime() - 5 * 3600 * 1000).toISOString().slice(0, 10)
+}
+
 /** Hoy en Lima, como "aaaa-mm-dd". */
 export function hoyISO() {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: ZONA, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
+  return fechaLima(new Date())
 }
 
 /** Rango permitido para las fechas de la app. */
@@ -98,7 +114,7 @@ export function diaSemanaLunes(a, m, d) {
 
 /** Fecha (aaaa-mm-dd) en Lima de un instante ISO (UTC) del historial. */
 export function fechaLimaDeInstante(instante) {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: ZONA, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(instante))
+  return fechaLima(new Date(instante))
 }
 /** Hora en Lima, por ejemplo "03:45 p. m." */
 export function horaLima(instante) {
