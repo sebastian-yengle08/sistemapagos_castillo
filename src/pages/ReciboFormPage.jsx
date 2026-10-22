@@ -6,7 +6,7 @@ import { Boton, Campo, Chip, Tarjeta, Ventana, claseInput } from '../components/
 import { TIPOS, LIMITE_MONTO, NOMBRE_MIN, NOMBRE_MAX, DIAS_MAXIMOS_RECIBO } from '../config/constantes'
 import { buscarDuplicado, crearRecibo, editarRecibo, motivoRechazo, obtenerRecibo } from '../data/store'
 import { useDatos } from '../data/useDatos'
-import { formatoFecha, hoyISO, fechaMaximaRecibo, fechaEnRango } from '../utils/fechas'
+import { formatoFecha, hoyISO, FECHA_MINIMA, fechaMaximaRecibo, fechaEnRango } from '../utils/fechas'
 import { formatoSoles, leerMonto } from '../utils/dinero'
 import { soloLetras, soloLetrasNumeros, soloMontoCuota, soloCodigo, soloDigitos, soloAlfanumerico, codigoValido, limpiarNombre, errorDeRuc } from '../utils/validacion'
 
@@ -26,9 +26,9 @@ export default function ReciboFormPage() {
   const { state } = useLocation()
   const origen = state?.origen // pantalla de la que se vino (se conserva al volver al detalle)
   const hoy = hoyISO() // fecha de hoy en Lima
-  // La fecha límite va desde hoy hasta 40 días después, tanto al crear como al editar. Al editar
-  // solo se puede conservar la fecha original (aunque ya haya pasado); nunca poner una pasada nueva.
-  const fechaMinima = hoy
+  // La fecha límite va desde el inicio del año hasta 40 días después de hoy, al crear y al editar.
+  // Una fecha ya pasada se acepta con aviso: el recibo queda como Vencido.
+  const fechaMinima = FECHA_MINIMA
   const fechaMax = fechaMaximaRecibo() // hoy + 40 días
   const [original] = useState(() => (id ? obtenerRecibo(id) : null))
   const { recibos } = useDatos()
@@ -84,9 +84,7 @@ export default function ReciboFormPage() {
             ? ['Este recibo ya no existe', 'Se eliminó desde otro dispositivo mientras lo editabas.']
             : enVivo.estado === 'Pagado'
               ? ['Este recibo se acaba de pagar', 'Otro dispositivo lo pagó mientras lo editabas, así que ya no se puede editar. Corrige el pago desde su detalle.']
-              : enVivo.bloqueado
-                ? ['El pago de este recibo está bloqueado', 'El gerente lo bloqueó, por eso no se puede editar. Espera a que quite el bloqueo.']
-                : null
+              : null
   if (bloqueo) {
     return (
       <Tarjeta className="mx-auto max-w-lg p-6 text-center">
@@ -116,7 +114,7 @@ export default function ReciboFormPage() {
     }
     if (!fecha) e.fecha = 'Elige la fecha límite de pago.'
     else if (!fechaEnRango(fecha, fechaMinima, fechaMax) && !(editando && fecha === original.fechaLimite)) {
-      e.fecha = `La fecha límite no puede ser anterior a hoy ni posterior a ${DIAS_MAXIMOS_RECIBO} días: debe estar entre el ${formatoFecha(fechaMinima)} y el ${formatoFecha(fechaMax)}.`
+      e.fecha = `La fecha límite debe estar entre el ${formatoFecha(fechaMinima)} y el ${formatoFecha(fechaMax)} (hoy + ${DIAS_MAXIMOS_RECIBO} días).`
     }
     const m = leerMonto(monto)
     if (monto.trim() === '') e.monto = 'Escribe el monto total.'
@@ -232,8 +230,8 @@ export default function ReciboFormPage() {
             error={errores.fecha}
             ayuda={
               editando
-                ? `Puedes conservar la fecha actual. Si la cambias, desde hoy (${formatoFecha(fechaMinima)}) hasta el ${formatoFecha(fechaMax)}.`
-                : `Desde hoy (${formatoFecha(fechaMinima)}) hasta el ${formatoFecha(fechaMax)} (${DIAS_MAXIMOS_RECIBO} días).`
+                ? `Desde el ${formatoFecha(fechaMinima)} hasta el ${formatoFecha(fechaMax)}. Una fecha pasada deja el recibo como Vencido.`
+                : `Desde el ${formatoFecha(fechaMinima)} hasta el ${formatoFecha(fechaMax)} (hoy + ${DIAS_MAXIMOS_RECIBO} días). Una fecha pasada deja el recibo como Vencido.`
             }
           >
             <input id="f-fecha" type="date" min={fechaMinima} max={fechaMax} value={fecha} onChange={(e) => setFecha(e.target.value)} className={claseInput(errores.fecha)} />

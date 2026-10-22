@@ -39,13 +39,10 @@ const mapas = {
     aFila: (r) => ({
       id: r.id, tipo: r.tipo, empresa: r.empresa, codigo: r.codigo, fecha_limite: r.fechaLimite, monto: r.monto,
       estado: r.estado, pago: r.pago ?? null, prestamo_id: r.prestamoId ?? null, cuota: r.cuota ?? null, creado_en: r.creadoEn,
-      // Solo se envía si se usó: así, mientras la base no tenga la columna `bloqueado`, nada más se rompe
-      ...(r.bloqueado !== undefined ? { bloqueado: r.bloqueado } : {}),
     }),
     deFila: (f) => ({
       id: f.id, tipo: f.tipo, empresa: f.empresa, codigo: f.codigo, fechaLimite: f.fecha_limite, monto: Number(f.monto),
       estado: f.estado, pago: f.pago ?? null, prestamoId: f.prestamo_id ?? null, cuota: f.cuota ?? null, creadoEn: iso(f.creado_en),
-      ...('bloqueado' in f ? { bloqueado: !!f.bloqueado } : {}),
     }),
   },
   prestamos: {

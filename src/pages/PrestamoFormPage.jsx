@@ -7,7 +7,7 @@ import { Boton, Campo, Insignia, Tarjeta, Vacio, claseInput } from '../component
 import { calcularCuotas, crearPrestamo, editarPrestamo, motivoRechazo, obtenerPrestamo, planEdicionPrestamo } from '../data/store'
 import { useDatos } from '../data/useDatos'
 import { LIMITE_PRESTAMO, LIMITE_CUOTA, MAX_CUOTAS, NOMBRE_MIN, NOMBRE_MAX } from '../config/constantes'
-import { formatoFecha, hoyISO, fechaMaxima } from '../utils/fechas'
+import { formatoFecha, hoyISO, FECHA_MINIMA, fechaMaxima } from '../utils/fechas'
 import { formatoSoles, leerMonto } from '../utils/dinero'
 import { limpiarNombre, soloLetras, soloMontoCuota } from '../utils/validacion'
 
@@ -16,9 +16,8 @@ export default function PrestamoFormPage() {
   const editando = !!id
   const navegar = useNavigate()
   const hoy = hoyISO() // fecha de hoy en Lima
-  // Una fecha nueva de cuota no puede ser anterior a hoy. Si al editar una cuota ya vencida
-  // no se cambia su fecha, se conserva para no bloquear los demás cambios del préstamo.
-  const fechaMinima = hoy
+  // La fecha de la cuota puede ir desde el inicio del año; una fecha pasada deja esa cuota como Vencida.
+  const fechaMinima = FECHA_MINIMA
   const fechaMax = fechaMaxima() // hoy + 24 años
   const [original] = useState(() => (id ? obtenerPrestamo(id) : null))
   const { recibos } = useDatos()
@@ -42,7 +41,6 @@ export default function PrestamoFormPage() {
   const etiquetaFecha = primeraPendiente && primeraPendiente.cuota > 1 ? `Fecha de la cuota ${primeraPendiente.cuota}` : 'Fecha de la primera cuota'
   const fechaPendienteActual = primeraPendiente?.fechaLimite ?? null
   const fechaEsLaActual = editando && !!fechaPendienteActual && primera === fechaPendienteActual
-  const fechaVencidaSinCambios = editando && !!fechaPendienteActual && fechaPendienteActual < hoy && fechaEsLaActual
   const fechaOk = todasPagadas || (!!primera && primera <= fechaMax && (primera >= fechaMinima || fechaEsLaActual))
 
   const nCuotas = Number(num)
@@ -91,11 +89,8 @@ export default function PrestamoFormPage() {
     else if (montoCuotaEfectivo > LIMITE_CUOTA) er.cuota = 'El monto de cada cuota no puede superar los 10 dígitos.'
     if (!todasPagadas) {
       if (!primera) er.primera = `Elige la fecha de ${sujetoFecha}.`
-      else if (primera < fechaMinima && !fechaEsLaActual) {
-        er.primera = editando
-          ? `La fecha de ${sujetoFecha} no puede ser anterior a hoy (${formatoFecha(hoy)}).`
-          : `La fecha de la primera cuota no puede ser anterior a hoy (${formatoFecha(hoy)}).`
-      } else if (primera > fechaMax) er.primera = `La fecha de ${sujetoFecha} no puede ser posterior al ${formatoFecha(fechaMax)}.`
+      else if (primera < fechaMinima && !fechaEsLaActual) er.primera = `La fecha de ${sujetoFecha} no puede ser anterior al ${formatoFecha(fechaMinima)}.`
+      else if (primera > fechaMax) er.primera = `La fecha de ${sujetoFecha} no puede ser posterior al ${formatoFecha(fechaMax)}.`
     }
     if (montoTotal > LIMITE_PRESTAMO) er.cuota = `El monto total del préstamo (suma de las cuotas) no puede superar ${formatoSoles(LIMITE_PRESTAMO)}. Baja el monto o el número de cuotas.`
     setErrores(er)
@@ -169,11 +164,9 @@ export default function PrestamoFormPage() {
             ayuda={
               todasPagadas
                 ? 'Todas las cuotas están pagadas.'
-                : fechaVencidaSinCambios
-                  ? 'La cuota ya está vencida. Si cambias la fecha, debe ser hoy o después.'
-                  : primeraPendiente && primeraPendiente.cuota > 1
-                    ? 'Debe ser hoy o una fecha futura. Las cuotas pendientes se reprograman desde esta fecha.'
-                    : 'Debe ser hoy o una fecha futura.'
+                : primeraPendiente && primeraPendiente.cuota > 1
+                  ? `Desde el ${formatoFecha(fechaMinima)}. Las cuotas pendientes se reprograman desde esta fecha; las que queden en el pasado figuran como Vencidas.`
+                  : `Desde el ${formatoFecha(fechaMinima)}. Las cuotas con fecha pasada figuran como Vencidas.`
             }
           >
             <input

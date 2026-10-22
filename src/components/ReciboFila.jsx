@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom'
-import { Zap, Truck, Landmark, FileText, ChevronRight, Lock } from 'lucide-react'
+import { Zap, Truck, Landmark, FileText, ChevronRight } from 'lucide-react'
 import { Insignia } from './ui'
 import { estadoVisible } from '../utils/estado'
 import { formatoFecha } from '../utils/fechas'
@@ -29,11 +29,6 @@ export default function ReciboFila({ recibo, hoy, compacta, acento }) {
         <span className="block truncate text-sm text-suave">
           {recibo.codigo} · Vence {formatoFecha(recibo.fechaLimite)}
         </span>
-        {recibo.bloqueado && estado !== 'Pagado' && (
-          <span className="mt-0.5 flex items-center gap-1 text-xs font-semibold text-venc-tx">
-            <Lock size={13} aria-hidden="true" /> Pago bloqueado
-          </span>
-        )}
         {compacta && (
           <span className="mt-1 flex items-center gap-2">
             <Insignia estado={estado} />

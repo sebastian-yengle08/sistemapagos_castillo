@@ -3,10 +3,10 @@
 // Cuotas de préstamo: no se editan ni eliminan. Gerente: solo consulta.
 import { useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, CheckCircle2, Pencil, Trash2, Wallet, FileX, Banknote, ZoomIn, Lock, LockOpen } from 'lucide-react'
+import { ArrowLeft, CheckCircle2, Pencil, Trash2, Wallet, FileX, Banknote, ZoomIn } from 'lucide-react'
 import { useDatos } from '../data/useDatos'
 import { useAuth } from '../context/AuthContext'
-import { bloquearRecibo, cuotaPendienteAnterior, eliminarRecibo, motivoRechazo } from '../data/store'
+import { cuotaPendienteAnterior, eliminarRecibo } from '../data/store'
 import { urlFotoValida } from '../data/persistencia'
 import { Boton, Insignia, Tarjeta, Ventana, Vacio } from '../components/ui'
 import RegistrarPagoModal from '../components/RegistrarPagoModal'
@@ -35,11 +35,6 @@ export default function ReciboDetallePage() {
   const [corrigiendo, setCorrigiendo] = useState(false)
   const [eliminando, setEliminando] = useState(false)
   const [verFoto, setVerFoto] = useState(false) // foto del voucher en grande
-  const [errorBloqueo, setErrorBloqueo] = useState('')
-
-  function alternarBloqueo() {
-    setErrorBloqueo(bloquearRecibo(r.id, !r.bloqueado) ? '' : motivoRechazo().mensaje)
-  }
 
   // Pantalla de la que se vino (calendario, avisos, préstamo, historial); por defecto el calendario
   const origen = state?.origen ?? '/'
@@ -64,10 +59,8 @@ export default function ReciboDetallePage() {
   const estado = estadoVisible(r, hoy)
   const Icono = iconoDeTipo(r.tipo)
   const esAsistente = perfil === 'asistente'
-  const esGerente = perfil === 'gerente'
   const esCuota = !!r.prestamoId
   const pagado = r.estado === 'Pagado'
-  const bloqueado = !pagado && !!r.bloqueado // el gerente bloqueó el pago de este recibo
   const cuotaPrevia = !pagado ? cuotaPendienteAnterior(r) : null // las cuotas se pagan en orden
   const interes = esCuota ? interesCuota(r) : 0
   const dias = diasEntre(hoy, r.fechaLimite)
@@ -139,35 +132,6 @@ export default function ReciboDetallePage() {
         </Tarjeta>
       )}
 
-      {bloqueado && (
-        <p role="status" className="mt-4 flex items-center gap-2 rounded-xl border border-venc-bd bg-venc-bg p-3 text-sm font-semibold text-venc-tx">
-          <Lock size={18} aria-hidden="true" className="shrink-0" />
-          {esGerente ? 'Pago bloqueado: el asistente no puede pagar este recibo.' : 'El gerente bloqueó el pago de este recibo. No puedes pagarlo hasta que quite el bloqueo.'}
-        </p>
-      )}
-
-      {/* Gerente: bloquear o desbloquear el pago de un recibo pendiente */}
-      {esGerente && !pagado && (bloqueado || estado === 'Pendiente') && (
-        <div className="mt-5 flex flex-col gap-2">
-          <Boton onClick={alternarBloqueo} grande>
-            {bloqueado ? (
-              <>
-                <LockOpen size={20} aria-hidden="true" /> Quitar bloqueo del pago
-              </>
-            ) : (
-              <>
-                <Lock size={20} aria-hidden="true" /> Bloquear pago
-              </>
-            )}
-          </Boton>
-          {errorBloqueo && (
-            <p role="alert" className="rounded-xl border border-venc-bd bg-venc-bg px-4 py-3 text-sm font-semibold text-venc-tx">
-              {errorBloqueo}
-            </p>
-          )}
-        </div>
-      )}
-
       {/* Acciones del asistente según el estado */}
       {esAsistente && (
         <div className="mt-5 flex flex-col gap-3">
@@ -176,7 +140,7 @@ export default function ReciboDetallePage() {
               <Banknote size={18} aria-hidden="true" /> Primero hay que pagar la cuota {cuotaPrevia} de este préstamo.
             </p>
           )}
-          {!pagado && !cuotaPrevia && !bloqueado && (
+          {!pagado && !cuotaPrevia && (
             <Boton variante="primario" grande onClick={() => setPagando(true)}>
               <Wallet size={22} aria-hidden="true" /> Registrar pago
             </Boton>
@@ -188,8 +152,7 @@ export default function ReciboDetallePage() {
             </Boton>
           )}
 
-          {/* Con el pago bloqueado por el gerente no se puede hacer ninguna acción: ni pagar, ni editar, ni eliminar */}
-          {!pagado && !esCuota && !bloqueado && (
+          {!pagado && !esCuota && (
             <div className="grid grid-cols-2 gap-3">
               <Boton onClick={() => navegar(`/recibos/${r.id}/editar`, { state: { origen } })}>
                 <Pencil size={18} aria-hidden="true" /> Editar

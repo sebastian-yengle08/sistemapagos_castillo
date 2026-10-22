@@ -13,7 +13,6 @@ import { crearDatosEjemplo } from './seed'
 import { hayNube, leerNube, sincronizarNube, suscribirCambios, borrarVoucher, confirmarVersiones } from './persistencia'
 import { hoyISO, FECHA_MINIMA, fechaMaximaRecibo, fechaMaxima, fechaEnRango, formatoFecha, sumarMeses, partes, textoRangoFechas, fechaLimaDeInstante } from '../utils/fechas'
 import { formatoSoles } from '../utils/dinero'
-import { estadoVisible } from '../utils/estado'
 import { PERFILES, MAX_CUOTAS, LIMITE_CUOTA, LIMITE_PRESTAMO, LIMITE_MONTO, NOMBRE_MIN, NOMBRE_MAX, DIAS_MAXIMOS_RECIBO } from '../config/constantes'
 import { codigoValido, limpiarNombre, sinTildes } from '../utils/validacion'
 
@@ -226,11 +225,10 @@ function errorDeNombre(nombre) {
 }
 
 /** Valida los datos de un préstamo (nuevo o editado). Devuelve true, o false dejando el motivo. */
-function prestamoValido(datos, desdeHoy = false, cuotaBase = 1) {
+function prestamoValido(datos, cuotaBase = 1) {
   const errNombre = errorDeNombre(datos.entidad)
   if (errNombre) return rechazar(errNombre, 'entidad')
   if (!fechaEnRango(datos.primeraFecha)) return rechazar(`La fecha de la primera cuota debe estar ${textoRangoFechas()}.`, 'primera')
-  if (desdeHoy && datos.primeraFecha < hoyISO()) return rechazar(`La fecha de la primera cuota no puede ser anterior a hoy (${formatoFecha(hoyISO())}).`, 'primera')
   if (!Number.isInteger(datos.numCuotas) || datos.numCuotas < 1 || datos.numCuotas > MAX_CUOTAS) return rechazar(`El número de cuotas debe ser de 1 a ${MAX_CUOTAS}.`, 'num')
   if (cuotaBase <= datos.numCuotas) {
     const ultima = sumarMeses(datos.primeraFecha, datos.numCuotas - cuotaBase, partes(datos.primeraFecha).d)
@@ -282,7 +280,7 @@ export function crearRecibo(datos) {
   if (!esAsistente()) return rechazar(SOLO_ASISTENTE)
   const errNombre = errorDeNombre(datos.empresa)
   if (errNombre) return rechazar(errNombre, 'empresa')
-  const fechaMin = hoyISO()
+  const fechaMin = FECHA_MINIMA
   const fechaMax = fechaMaximaRecibo()
   if (!fechaEnRango(datos.fechaLimite, fechaMin, fechaMax)) return rechazar(`La fecha límite debe estar entre el ${formatoFecha(fechaMin)} y el ${formatoFecha(fechaMax)} (hoy + ${DIAS_MAXIMOS_RECIBO} días).`, 'fecha')
   if (!codigoValido(datos.tipo, datos.codigo)) return rechazar('El código no tiene el formato correcto para este tipo de recibo.', 'codigo')
@@ -325,7 +323,6 @@ export function editarRecibo(id, cambios) {
   if (!actual) return rechazar('Este recibo ya no existe. Vuelve al calendario y actualiza la pantalla.')
   if (actual.prestamoId) return rechazar('Las cuotas de un préstamo no se pueden editar.')
   if (actual.estado === 'Pagado') return rechazar('Este recibo ya fue pagado (puede haberse pagado desde otro dispositivo), por eso no se puede editar. Vuelve al detalle para ver su estado actual.')
-  if (actual.bloqueado) return rechazar('El gerente bloqueó el pago de este recibo, por eso no se puede editar. Espera a que quite el bloqueo.')
   // El tipo de un recibo no cambia: cada tipo tiene su propio formato de código y sus reglas
   if (cambios.tipo !== undefined && cambios.tipo !== actual.tipo) return rechazar('El tipo de un recibo no se puede cambiar. Elimina el recibo y regístralo de nuevo con el tipo correcto.')
   if (cambios.empresa !== undefined) {
@@ -333,9 +330,8 @@ export function editarRecibo(id, cambios) {
     if (errNombre) return rechazar(errNombre, 'empresa')
   }
   const fechaMax = fechaMaximaRecibo()
-  // Una fecha nueva debe estar entre hoy y hoy + 40 días; solo se puede conservar la actual (aunque ya haya pasado)
-  if (cambios.fechaLimite !== undefined && !fechaEnRango(cambios.fechaLimite, hoyISO(), fechaMax) && cambios.fechaLimite !== actual.fechaLimite) {
-    return rechazar(`La fecha límite no puede ser anterior a hoy ni posterior a ${DIAS_MAXIMOS_RECIBO} días: debe estar entre el ${formatoFecha(hoyISO())} y el ${formatoFecha(fechaMax)}.`, 'fecha')
+  if (cambios.fechaLimite !== undefined && !fechaEnRango(cambios.fechaLimite, FECHA_MINIMA, fechaMax) && cambios.fechaLimite !== actual.fechaLimite) {
+    return rechazar(`La fecha límite debe estar entre el ${formatoFecha(FECHA_MINIMA)} y el ${formatoFecha(fechaMax)} (hoy + ${DIAS_MAXIMOS_RECIBO} días).`, 'fecha')
   }
   if (cambios.monto !== undefined && !montoValido(cambios.monto)) return rechazar(MSG_MONTO, 'monto')
   const nuevo = { ...actual, ...cambios, empresa: limpiarNombre(cambios.empresa ?? actual.empresa), codigo: (cambios.codigo ?? actual.codigo).trim() }
@@ -362,38 +358,12 @@ export function eliminarRecibo(id) {
   const actual = obtenerRecibo(id)
   // No se eliminan cuotas de préstamo ni recibos pagados
   if (!actual || actual.prestamoId || actual.estado === 'Pagado') return false
-  if (actual.bloqueado) {
-    rechazar('El gerente bloqueó el pago de este recibo, por eso no se puede eliminar.')
-    return false
-  }
   publicar({
     ...estado,
     recibos: estado.recibos.filter((r) => r.id !== id),
     historial: anotar(estado.historial, 'eliminar', `Eliminó el recibo de ${actual.empresa} (${actual.codigo}) por ${formatoSoles(actual.monto)}`),
   })
   return true
-}
-
-/**
- * El gerente bloquea (true) o desbloquea (false) el pago de un recibo o cuota pendiente.
- * Mientras esté bloqueado, el asistente no puede pagarlo ni eliminarlo.
- */
-export function bloquearRecibo(id, activo) {
-  if (actor !== 'gerente') return rechazar('Solo el gerente puede bloquear o desbloquear pagos.')
-  const actual = obtenerRecibo(id)
-  if (!actual) return rechazar('Este recibo ya no existe. Vuelve al calendario y actualiza la pantalla.')
-  if (actual.estado === 'Pagado') return rechazar('Este recibo ya figura como pagado: no se puede bloquear su pago.')
-  // Solo se bloquean pagos pendientes: uno vencido no se puede bloquear (quitar un bloqueo sí se puede siempre)
-  if (activo && estadoVisible(actual, hoyISO()) !== 'Pendiente') return rechazar('Solo se puede bloquear el pago de recibos pendientes. Este recibo ya está vencido.')
-  if (!!actual.bloqueado === !!activo) return actual // no hay nada que cambiar
-  const nuevo = { ...actual, bloqueado: !!activo }
-  const de = actual.prestamoId ? `de la cuota ${actual.cuota} del préstamo de ${actual.empresa}` : `del recibo de ${actual.empresa} (${actual.codigo})`
-  publicar({
-    ...estado,
-    recibos: estado.recibos.map((r) => (r.id === id ? nuevo : r)),
-    historial: anotar(estado.historial, 'bloqueo', activo ? `Bloqueó el pago ${de}` : `Quitó el bloqueo del pago ${de}`),
-  })
-  return nuevo
 }
 
 /** La fecha de pago debe estar dentro del rango y no puede ser futura. */
@@ -459,7 +429,6 @@ export function registrarPago(id, datos) {
   if (!actual) return rechazar('Este recibo ya no existe. Vuelve al calendario y actualiza la pantalla.')
   if (actual.estado === 'Pagado') return rechazar('Este recibo ya figura como pagado (puede haberse pagado desde otro dispositivo). Cierra esta ventana para ver su estado actual.')
   if (!fechaPagoValida(datos.fecha)) return rechazar('La fecha de pago debe estar entre el 1 de enero de 2026 y hoy.', 'fecha')
-  if (actual.bloqueado) return rechazar('El gerente bloqueó el pago de este recibo. No se puede pagar hasta que quite el bloqueo.')
   const anteriorPendiente = cuotaPendienteAnterior(actual)
   if (anteriorPendiente) return rechazar(`Las cuotas se pagan en orden: primero hay que pagar la cuota ${anteriorPendiente} de este préstamo.`)
   const errFecha = errorDeFechaPago(actual, datos.fecha)
@@ -555,7 +524,7 @@ export function calcularCuotas({ numCuotas, montoCuota, primeraFecha }) {
 /** datos: { entidad, montoTotal, numCuotas, montoCuota, primeraFecha } */
 export function crearPrestamo(datos) {
   if (!esAsistente()) return rechazar('Solo el asistente puede registrar préstamos.') // los préstamos los gestiona el asistente
-  if (!prestamoValido(datos, true)) return null
+  if (!prestamoValido(datos)) return null
   const entidad = limpiarNombre(datos.entidad)
   const repetido = estado.prestamos.find(
     (p) => normalizar(p.entidad) === normalizar(entidad) && p.numCuotas === datos.numCuotas && Math.abs(p.montoCuota - datos.montoCuota) < 0.005 && p.primeraFecha === datos.primeraFecha,
@@ -627,16 +596,11 @@ export function editarPrestamo(id, datos) {
   if (!esAsistente()) return rechazar('Solo el asistente puede editar préstamos.')
   if (datos.numCuotas !== actual.numCuotas) return rechazar('El número de cuotas no se puede cambiar al editar un préstamo.', 'num')
   const cuotasActuales = estado.recibos.filter((r) => r.prestamoId === id)
-  const bloqueada = cuotasActuales.find((r) => r.bloqueado && r.estado !== 'Pagado')
-  if (bloqueada) return rechazar(`El gerente bloqueó el pago de la cuota ${bloqueada.cuota}, por eso no se puede editar el préstamo. Espera a que quite el bloqueo.`)
   const hayPagadas = cuotasActuales.some((r) => r.estado === 'Pagado')
   const cuotaUnoPagada = cuotasActuales.some((r) => r.cuota === 1 && r.estado === 'Pagado')
   const primeraPendienteActual = cuotasActuales.filter((r) => r.estado !== 'Pagado').sort((a, b) => a.cuota - b.cuota)[0] ?? null
   const cuotaBase = primeraPendienteActual?.cuota ?? datos.numCuotas + 1
-  // Una fecha nueva debe ser hoy o posterior. Si la cuota ya estaba vencida y no se cambia su
-  // fecha, se conserva para poder editar los demás datos del préstamo.
-  const fechaCambio = !!primeraPendienteActual && datos.primeraFecha !== primeraPendienteActual.fechaLimite
-  if (!prestamoValido(datos, fechaCambio, cuotaBase)) return null
+  if (!prestamoValido(datos, cuotaBase)) return null
   // Si ya hay cuotas pagadas, el monto de cada cuota no puede cambiar.
   if (hayPagadas && Math.abs(Number(datos.montoCuota) - Number(actual.montoCuota)) > 0.005) return rechazar('Ya hay cuotas pagadas (puede haberse pagado una desde otro dispositivo): el monto de cada cuota no se puede cambiar.', 'cuota')
   const { cuotas, minimoCuotas } = planEdicionPrestamo(id, datos)
