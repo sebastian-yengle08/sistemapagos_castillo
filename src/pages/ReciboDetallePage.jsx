@@ -97,6 +97,7 @@ export default function ReciboDetallePage() {
 
         <dl className="mt-4">
           <Dato etiqueta="Fecha límite">{formatoFecha(r.fechaLimite)}</Dato>
+          {r.titular && <Dato etiqueta="Titular">{r.titular}</Dato>}
           <Dato etiqueta="Tipo">{r.tipo}</Dato>
           {esCuota && <Dato etiqueta="Cuota de préstamo">{r.cuota}</Dato>}
         </dl>

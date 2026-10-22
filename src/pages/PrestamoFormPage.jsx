@@ -23,6 +23,7 @@ export default function PrestamoFormPage() {
   const { recibos } = useDatos()
 
   const [entidad, setEntidad] = useState(original?.entidad ?? '')
+  const [titular, setTitular] = useState(original?.titular ?? '')
   const [num, setNum] = useState(original ? String(original.numCuotas) : '')
   const [cuota, setCuota] = useState(original ? original.montoCuota.toFixed(2) : '')
   const [errores, setErrores] = useState({})
@@ -78,6 +79,11 @@ export default function PrestamoFormPage() {
     const sujetoFecha = primeraPendiente?.cuota > 1 ? `la cuota ${primeraPendiente.cuota}` : 'la primera cuota'
     if (!nombreBanco) er.entidad = 'Escribe el banco o la entidad.'
     else if (nombreBanco.length < NOMBRE_MIN) er.entidad = `El nombre debe tener al menos ${NOMBRE_MIN} caracteres.`
+    // Un préstamo antiguo sin titular puede seguir sin él; uno nuevo (o que ya lo tiene) lo necesita
+    const nombreTitular = limpiarNombre(titular)
+    if (!nombreTitular) {
+      if (!editando || original.titular) er.titular = 'Escribe el nombre del titular.'
+    } else if (nombreTitular.length < NOMBRE_MIN) er.titular = `El nombre del titular debe tener al menos ${NOMBRE_MIN} caracteres.`
     if (!(Number.isInteger(nCuotas) && nCuotas >= 1 && nCuotas <= MAX_CUOTAS)) er.num = `Escribe cuántas cuotas son (de 1 a ${MAX_CUOTAS}).`
     else if (editando && cuotasOk && nCuotas < plan.minimoCuotas) er.num = `Ya hay cuotas pagadas hasta la ${plan.minimoCuotas}: no puede haber menos.`
     if (cuotasOk && ultimaFecha > fechaMax) {
@@ -95,7 +101,7 @@ export default function PrestamoFormPage() {
     if (montoTotal > LIMITE_PRESTAMO) er.cuota = `El monto total del préstamo (suma de las cuotas) no puede superar ${formatoSoles(LIMITE_PRESTAMO)}. Baja el monto o el número de cuotas.`
     setErrores(er)
     if (Object.keys(er).length) return
-    const datos = { entidad, montoTotal, numCuotas: nCuotas, montoCuota: montoCuotaEfectivo, primeraFecha: primera }
+    const datos = { entidad, titular, montoTotal, numCuotas: nCuotas, montoCuota: montoCuotaEfectivo, primeraFecha: primera }
     const p = editando ? editarPrestamo(id, datos) : crearPrestamo(datos)
     if (!p) {
       // El store rechazó el guardado: se muestra el motivo real, junto al campo que corresponde
@@ -125,6 +131,18 @@ export default function PrestamoFormPage() {
       <form noValidate onSubmit={guardar} className="mt-5 flex flex-col gap-5 rounded-2xl border border-borde bg-sup p-4 sm:p-6">
         <Campo etiqueta="Banco o entidad" id="p-ent" error={errores.entidad}>
           <input id="p-ent" maxLength={NOMBRE_MAX} value={entidad} onChange={(e) => setEntidad(soloLetras(e.target.value))} placeholder="Ej.: Banco de Crédito" className={claseInput(errores.entidad)} />
+        </Campo>
+        <Campo etiqueta="Nombre del titular" id="p-tit" error={errores.titular} ayuda="Persona o empresa a cuyo nombre está el préstamo. Solo letras.">
+          <input
+            id="p-tit"
+            autoComplete="off"
+            maxLength={NOMBRE_MAX}
+            value={titular}
+            onChange={(e) => setTitular(soloLetras(e.target.value))}
+            onBlur={() => setTitular(limpiarNombre(titular))}
+            placeholder="Ej.: Juan Pérez Castillo"
+            className={claseInput(errores.titular)}
+          />
         </Campo>
         <div className="grid gap-5 sm:grid-cols-2">
           <Campo etiqueta="Número de cuotas" id="p-num" error={errores.num} ayuda={editando ? 'El número de cuotas no se puede cambiar al editar un préstamo.' : `De 1 a ${MAX_CUOTAS} cuotas.`}>

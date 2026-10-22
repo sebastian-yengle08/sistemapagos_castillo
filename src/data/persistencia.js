@@ -39,20 +39,25 @@ const mapas = {
     aFila: (r) => ({
       id: r.id, tipo: r.tipo, empresa: r.empresa, codigo: r.codigo, fecha_limite: r.fechaLimite, monto: r.monto,
       estado: r.estado, pago: r.pago ?? null, prestamo_id: r.prestamoId ?? null, cuota: r.cuota ?? null, creado_en: r.creadoEn,
+      // Solo se envía si hay titular: mientras la base no tenga la columna, nada más se rompe
+      ...(r.titular !== undefined ? { titular: r.titular } : {}),
     }),
     deFila: (f) => ({
       id: f.id, tipo: f.tipo, empresa: f.empresa, codigo: f.codigo, fechaLimite: f.fecha_limite, monto: Number(f.monto),
       estado: f.estado, pago: f.pago ?? null, prestamoId: f.prestamo_id ?? null, cuota: f.cuota ?? null, creadoEn: iso(f.creado_en),
+      ...(f.titular != null ? { titular: f.titular } : {}),
     }),
   },
   prestamos: {
     aFila: (p) => ({
       id: p.id, entidad: p.entidad, monto_total: p.montoTotal, num_cuotas: p.numCuotas, monto_cuota: p.montoCuota,
       primera_fecha: p.primeraFecha, correlativo: p.correlativo, creado_en: p.creadoEn,
+      ...(p.titular !== undefined ? { titular: p.titular } : {}),
     }),
     deFila: (f) => ({
       id: f.id, entidad: f.entidad, montoTotal: Number(f.monto_total), numCuotas: f.num_cuotas, montoCuota: Number(f.monto_cuota),
       primeraFecha: f.primera_fecha, correlativo: f.correlativo, creadoEn: iso(f.creado_en),
+      ...(f.titular != null ? { titular: f.titular } : {}),
     }),
   },
   historial: {

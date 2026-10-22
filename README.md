@@ -52,7 +52,7 @@ supabase/schema.sql   tablas, índice único del código de recibo, Realtime y b
 
 - **Fechas**: desde el 1 de enero de 2026, siempre fechas reales y en hora de Lima. La fecha límite de un recibo (Servicio, Proveedor o Impuesto), nuevo o editado, va desde el 1 de enero de 2026 hasta 40 días después de hoy; si es una fecha pasada el recibo queda como Vencido. Los préstamos y sus cuotas pueden llegar hasta 24 años después de hoy. La fecha de pago no puede ser futura.
 - **Montos**: máximo 10 dígitos enteros y 2 decimales (coincide con `numeric(12,2)` de Supabase). El monto total de un préstamo es la suma de sus cuotas.
-- **Códigos de recibo**: Servicio = 8 a 13 dígitos; Impuesto = 4 dígitos; Proveedor = 10 caracteres alfanuméricos. Los códigos `PRE-...` de las cuotas de préstamo son internos.
+- **Códigos de recibo**: el mismo formato para Servicio, Impuesto y Proveedor: hasta 20 caracteres (letras, números y - _ / .). Los códigos `PRE-...` de las cuotas de préstamo son internos.
 - **Código único**: el código de cada recibo (voucher) es único y no se puede registrar dos veces, aunque cambie la empresa, el tipo o el mes. En *Nuevo recibo* los campos empiezan vacíos (solo la fecha sugiere hoy): no se autorrellenan empresas ni códigos de recibos anteriores.
 - **Recibo repetido**: al guardar se avisa si el código ya existe y no se permite guardarlo. Los recibos antiguos que ya tenían códigos repetidos se pueden seguir editando sin cambiar el código.
 - **Nombres** (empresa, entidad, banco): de 3 a 60 caracteres, un solo espacio entre palabras; al comparar no importan mayúsculas, espacios ni tildes. En Proveedor, cualquier número largo escrito en "Razón Social / RUC" se valida como RUC (11 dígitos y dígito verificador).

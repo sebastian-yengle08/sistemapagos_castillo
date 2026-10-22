@@ -13,6 +13,7 @@ export const MAX_CUOTAS = 120 // Número máximo de cuotas de un préstamo
 // Reglas de validación compartidas
 export const NOMBRE_MIN = 3 // Largo mínimo del nombre de una empresa, entidad o banco
 export const NOMBRE_MAX = 60 // Largo máximo
+export const CODIGO_MAX = 20 // Largo máximo del código de un recibo (igual para Servicio, Impuesto y Proveedor)
 export const DIAS_MAXIMOS_RECIBO = 40 // Un recibo nuevo puede vencer desde hoy hasta 40 días después
 export const ANIOS_MAXIMOS = 24 // Las fechas pueden llegar hasta 24 años después de hoy (el límite se mueve con el calendario)
 export const MAX_ARCHIVO_MB = 25 // Peso máximo de una foto antes de reducirla

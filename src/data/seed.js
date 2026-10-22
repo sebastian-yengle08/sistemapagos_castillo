@@ -3,6 +3,7 @@
 // vencidos, pagados con varios medios, etc.
 import { hoyISO, sumarDias, sumarMeses, partes } from '../utils/fechas'
 
+const TITULAR = 'Constructora Castillo S.A.C.' // a nombre de quién están los recibos de ejemplo
 let contador = 0
 const nuevoId = (p) => `${p}_${++contador}`
 
@@ -19,6 +20,7 @@ function recibo(hoy, o) {
     id: nuevoId('r'),
     tipo: o.tipo,
     empresa: o.empresa,
+    titular: TITULAR,
     codigo: o.codigo,
     fechaLimite,
     monto: o.monto,
@@ -67,6 +69,7 @@ export function crearDatosEjemplo() {
   const prestamo = {
     id: nuevoId('p'),
     entidad: 'Banco de Crédito',
+    titular: TITULAR,
     montoTotal: 12900, // 6 cuotas × S/ 2,150.00
     numCuotas: 6,
     montoCuota: 2150,
@@ -83,6 +86,7 @@ export function crearDatosEjemplo() {
       id: nuevoId('r'),
       tipo: 'Préstamo',
       empresa: prestamo.entidad,
+      titular: TITULAR,
       codigo: `PRE-0001-C${i}/6`,
       fechaLimite,
       monto: prestamo.montoCuota,

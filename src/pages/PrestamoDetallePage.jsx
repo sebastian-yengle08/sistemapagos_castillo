@@ -39,7 +39,10 @@ export default function PrestamoDetallePage() {
         </p>
       )}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold sm:text-3xl">{p.entidad}</h1>
+        <div>
+          <h1 className="text-2xl font-bold sm:text-3xl">{p.entidad}</h1>
+          {p.titular && <p className="mt-1 text-suave">Titular: {p.titular}</p>}
+        </div>
         {perfil === 'asistente' && (
           <Link to={`/prestamos/${p.id}/editar`} className="inline-flex min-h-12 items-center gap-2 rounded-full border border-borde bg-slate-900/[.05] px-5 font-semibold hover:bg-slate-900/10">
             <Pencil size={18} aria-hidden="true" /> Editar préstamo

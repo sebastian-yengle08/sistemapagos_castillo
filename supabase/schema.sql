@@ -116,3 +116,7 @@ drop trigger if exists recibos_bloqueo_pagos on public.recibos;
 drop function if exists public.impedir_pago_bloqueado();
 alter table public.recibos drop column if exists bloqueado;
 drop table if exists public.ajustes;
+
+-- Titular: nombre de la persona o empresa a cuyo nombre está el recibo o el préstamo.
+alter table public.recibos   add column if not exists titular text;
+alter table public.prestamos add column if not exists titular text;

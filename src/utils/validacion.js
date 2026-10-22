@@ -1,4 +1,5 @@
 // Validaciones de escritura reutilizables para los campos de la app.
+import { CODIGO_MAX } from '../config/constantes'
 
 /** Solo letras (con tildes, ñ, ü), espacios y signos comunes en nombres de empresas. Sin números. */
 export function soloLetras(texto) {
@@ -10,11 +11,6 @@ export function soloLetrasNumeros(texto) {
   return String(texto ?? '')
     .replace(/[^a-zA-Z0-9áéíóúÁÉÍÓÚñÑüÜ\s]/g, '')
     .replace(/\s+/g, ' ')
-}
-
-/** Solo letras y números, sin espacios ni guiones (código de Proveedor). */
-export function soloAlfanumerico(texto) {
-  return String(texto ?? '').replace(/[^a-zA-Z0-9]/g, '')
 }
 
 /** Solo números y punto decimal para montos (el prefijo S/ ya se muestra aparte). */
@@ -40,21 +36,13 @@ export function soloCodigo(texto) {
   return String(texto ?? '').replace(/[^a-zA-Z0-9\-_/. ]/g, '')
 }
 
-/** Solo dígitos (código de recibo de Servicio o Impuesto). */
-export function soloDigitos(texto) {
-  return String(texto ?? '').replace(/\D/g, '')
-}
-
 /**
- * Formato del código según el tipo de recibo:
- * Servicio = 8 a 13 dígitos; Impuesto = 4 dígitos; Proveedor = 10 alfanuméricos.
+ * Formato del código de un recibo (igual para todos los tipos): hasta CODIGO_MAX caracteres,
+ * con al menos una letra o un número y solo letras, números y - _ / . (y espacio).
  */
-export function codigoValido(tipo, codigo) {
+export function codigoValido(codigo) {
   const c = String(codigo ?? '').trim()
-  if (tipo === 'Servicio') return /^\d{8,13}$/.test(c)
-  if (tipo === 'Impuesto') return /^\d{4}$/.test(c)
-  if (tipo === 'Proveedor') return /^[A-Za-z0-9]{10}$/.test(c)
-  return true
+  return c.length >= 1 && c.length <= CODIGO_MAX && /[a-zA-Z0-9]/.test(c) && /^[a-zA-Z0-9\-_/. ]+$/.test(c)
 }
 
 /** Quita las tildes (para comparar "Telefónica" con "Telefonica"). */

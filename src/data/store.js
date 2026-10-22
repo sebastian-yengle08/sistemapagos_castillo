@@ -13,7 +13,7 @@ import { crearDatosEjemplo } from './seed'
 import { hayNube, leerNube, sincronizarNube, suscribirCambios, borrarVoucher, confirmarVersiones } from './persistencia'
 import { hoyISO, FECHA_MINIMA, fechaMaximaRecibo, fechaMaxima, fechaEnRango, formatoFecha, sumarMeses, partes, textoRangoFechas, fechaLimaDeInstante } from '../utils/fechas'
 import { formatoSoles } from '../utils/dinero'
-import { PERFILES, MAX_CUOTAS, LIMITE_CUOTA, LIMITE_PRESTAMO, LIMITE_MONTO, NOMBRE_MIN, NOMBRE_MAX, DIAS_MAXIMOS_RECIBO } from '../config/constantes'
+import { PERFILES, MAX_CUOTAS, LIMITE_CUOTA, LIMITE_PRESTAMO, LIMITE_MONTO, NOMBRE_MIN, NOMBRE_MAX, DIAS_MAXIMOS_RECIBO, CODIGO_MAX } from '../config/constantes'
 import { codigoValido, limpiarNombre, sinTildes } from '../utils/validacion'
 
 const CLAVE = 'pagosCastillo.datos.v1'
@@ -212,6 +212,7 @@ export const motivoRechazo = () => ultimoRechazo ?? { mensaje: 'No se pudo guard
 const esAsistente = () => actor === 'asistente'
 const SOLO_ASISTENTE = 'Solo el asistente puede registrar y modificar datos. El gerente solo consulta.'
 
+const MSG_CODIGO = `El código debe tener entre 1 y ${CODIGO_MAX} caracteres: letras, números y - _ / .`
 const MSG_DUPLICADO = 'Este código ya está registrado. Cada recibo debe tener un código distinto.'
 const MSG_MONTO = 'El monto debe ser mayor a cero y tener como máximo 10 dígitos enteros y 2 decimales.'
 const montoValido = (m) => Number.isFinite(m) && m > 0 && m <= LIMITE_MONTO
@@ -221,6 +222,15 @@ function errorDeNombre(nombre) {
   const largo = limpiarNombre(nombre).length
   if (largo < NOMBRE_MIN) return `El nombre debe tener al menos ${NOMBRE_MIN} caracteres.`
   if (largo > NOMBRE_MAX) return `El nombre no puede tener más de ${NOMBRE_MAX} caracteres.`
+  return null
+}
+
+/** Nombre del titular (a nombre de quién está el recibo o el préstamo). Devuelve el mensaje de error o null. */
+function errorDeTitular(titular, obligatorio = true) {
+  const largo = limpiarNombre(titular).length
+  if (largo === 0) return obligatorio ? 'Escribe el nombre del titular.' : null
+  if (largo < NOMBRE_MIN) return `El nombre del titular debe tener al menos ${NOMBRE_MIN} caracteres.`
+  if (largo > NOMBRE_MAX) return `El nombre del titular no puede tener más de ${NOMBRE_MAX} caracteres.`
   return null
 }
 
@@ -280,16 +290,19 @@ export function crearRecibo(datos) {
   if (!esAsistente()) return rechazar(SOLO_ASISTENTE)
   const errNombre = errorDeNombre(datos.empresa)
   if (errNombre) return rechazar(errNombre, 'empresa')
+  const errTitular = errorDeTitular(datos.titular)
+  if (errTitular) return rechazar(errTitular, 'titular')
   const fechaMin = FECHA_MINIMA
   const fechaMax = fechaMaximaRecibo()
   if (!fechaEnRango(datos.fechaLimite, fechaMin, fechaMax)) return rechazar(`La fecha límite debe estar entre el ${formatoFecha(fechaMin)} y el ${formatoFecha(fechaMax)} (hoy + ${DIAS_MAXIMOS_RECIBO} días).`, 'fecha')
-  if (!codigoValido(datos.tipo, datos.codigo)) return rechazar('El código no tiene el formato correcto para este tipo de recibo.', 'codigo')
+  if (!codigoValido(datos.codigo)) return rechazar(MSG_CODIGO, 'codigo')
   if (!montoValido(datos.monto)) return rechazar(MSG_MONTO, 'monto')
   if (buscarDuplicado(datos)) return rechazar(MSG_DUPLICADO, 'codigo')
   const recibo = {
     id: nuevoId('r'),
     tipo: datos.tipo,
     empresa: limpiarNombre(datos.empresa),
+    titular: limpiarNombre(datos.titular),
     codigo: datos.codigo.trim(),
     fechaLimite: datos.fechaLimite,
     monto: datos.monto,
@@ -311,6 +324,7 @@ export function crearRecibo(datos) {
 const CAMPOS_RECIBO = {
   tipo: ['el tipo', (v) => v],
   empresa: ['la empresa', (v) => v],
+  titular: ['el titular', (v) => v ?? 'sin titular'],
   codigo: ['el código', (v) => v],
   fechaLimite: ['la fecha límite', formatoFecha],
   monto: ['el monto', formatoSoles],
@@ -329,13 +343,18 @@ export function editarRecibo(id, cambios) {
     const errNombre = errorDeNombre(cambios.empresa)
     if (errNombre) return rechazar(errNombre, 'empresa')
   }
+  // Un recibo antiguo sin titular puede seguir sin él; si ya lo tiene, no se puede dejar vacío
+  if (cambios.titular !== undefined) {
+    const errTitular = errorDeTitular(cambios.titular, !!actual.titular)
+    if (errTitular) return rechazar(errTitular, 'titular')
+  }
   const fechaMax = fechaMaximaRecibo()
   if (cambios.fechaLimite !== undefined && !fechaEnRango(cambios.fechaLimite, FECHA_MINIMA, fechaMax) && cambios.fechaLimite !== actual.fechaLimite) {
     return rechazar(`La fecha límite debe estar entre el ${formatoFecha(FECHA_MINIMA)} y el ${formatoFecha(fechaMax)} (hoy + ${DIAS_MAXIMOS_RECIBO} días).`, 'fecha')
   }
   if (cambios.monto !== undefined && !montoValido(cambios.monto)) return rechazar(MSG_MONTO, 'monto')
-  const nuevo = { ...actual, ...cambios, empresa: limpiarNombre(cambios.empresa ?? actual.empresa), codigo: (cambios.codigo ?? actual.codigo).trim() }
-  if (!codigoValido(nuevo.tipo, nuevo.codigo)) return rechazar('El código no tiene el formato correcto para este tipo de recibo.', 'codigo')
+  const nuevo = { ...actual, ...cambios, empresa: limpiarNombre(cambios.empresa ?? actual.empresa), codigo: (cambios.codigo ?? actual.codigo).trim(), titular: cambios.titular !== undefined ? limpiarNombre(cambios.titular) || undefined : actual.titular }
+  if (!codigoValido(nuevo.codigo)) return rechazar(MSG_CODIGO, 'codigo')
   // Solo se comprueba si el código cambió: así se pueden corregir recibos antiguos que ya
   // compartían código (por ejemplo, los de ejemplo o los registrados antes de esta regla).
   if (normalizar(nuevo.codigo) !== normalizar(actual.codigo) && buscarDuplicado(nuevo, id)) return rechazar(MSG_DUPLICADO, 'codigo')
@@ -525,6 +544,8 @@ export function calcularCuotas({ numCuotas, montoCuota, primeraFecha }) {
 export function crearPrestamo(datos) {
   if (!esAsistente()) return rechazar('Solo el asistente puede registrar préstamos.') // los préstamos los gestiona el asistente
   if (!prestamoValido(datos)) return null
+  const errTitular = errorDeTitular(datos.titular)
+  if (errTitular) return rechazar(errTitular, 'titular')
   const entidad = limpiarNombre(datos.entidad)
   const repetido = estado.prestamos.find(
     (p) => normalizar(p.entidad) === normalizar(entidad) && p.numCuotas === datos.numCuotas && Math.abs(p.montoCuota - datos.montoCuota) < 0.005 && p.primeraFecha === datos.primeraFecha,
@@ -535,6 +556,7 @@ export function crearPrestamo(datos) {
   const prestamo = {
     id: nuevoId('p'),
     entidad,
+    titular: limpiarNombre(datos.titular),
     montoTotal: datos.montoTotal,
     numCuotas: datos.numCuotas,
     montoCuota: datos.montoCuota,
@@ -546,6 +568,7 @@ export function crearPrestamo(datos) {
     id: nuevoId('r'),
     tipo: 'Préstamo',
     empresa: prestamo.entidad,
+    titular: prestamo.titular,
     codigo: `${codigoBase}-C${c.numero}/${datos.numCuotas}`,
     fechaLimite: c.fechaLimite,
     monto: c.monto,
@@ -601,6 +624,9 @@ export function editarPrestamo(id, datos) {
   const primeraPendienteActual = cuotasActuales.filter((r) => r.estado !== 'Pagado').sort((a, b) => a.cuota - b.cuota)[0] ?? null
   const cuotaBase = primeraPendienteActual?.cuota ?? datos.numCuotas + 1
   if (!prestamoValido(datos, cuotaBase)) return null
+  // Un préstamo antiguo sin titular puede seguir sin él; si ya lo tiene, no se puede dejar vacío
+  const errTitular = errorDeTitular(datos.titular, !!actual.titular)
+  if (errTitular) return rechazar(errTitular, 'titular')
   // Si ya hay cuotas pagadas, el monto de cada cuota no puede cambiar.
   if (hayPagadas && Math.abs(Number(datos.montoCuota) - Number(actual.montoCuota)) > 0.005) return rechazar('Ya hay cuotas pagadas (puede haberse pagado una desde otro dispositivo): el monto de cada cuota no se puede cambiar.', 'cuota')
   const { cuotas, minimoCuotas } = planEdicionPrestamo(id, datos)
@@ -611,12 +637,13 @@ export function editarPrestamo(id, datos) {
     return rechazar(`Las cuotas pendientes no pueden vencer antes de la última cuota pagada (${formatoFecha(ultimaPagada)}). Ajusta la fecha de la cuota pendiente.`, 'primera')
   }
   const entidad = limpiarNombre(datos.entidad)
+  const titular = limpiarNombre(datos.titular) || undefined
   const codigoBase = `PRE-${String(actual.correlativo).padStart(4, '0')}`
   const porNumero = new Map(estado.recibos.filter((r) => r.prestamoId === id).map((r) => [r.cuota, r]))
   const ahora = new Date().toISOString()
   const nuevas = cuotas.map((c) => {
     const previa = porNumero.get(c.numero)
-    const comun = { empresa: entidad, codigo: `${codigoBase}-C${c.numero}/${datos.numCuotas}` }
+    const comun = { empresa: entidad, titular, codigo: `${codigoBase}-C${c.numero}/${datos.numCuotas}` }
     if (previa) return { ...previa, ...comun, ...(c.pagada ? {} : { fechaLimite: c.fechaLimite, monto: c.monto }) }
     return { id: nuevoId('r'), tipo: 'Préstamo', ...comun, fechaLimite: c.fechaLimite, monto: c.monto, estado: 'Pendiente', pago: null, prestamoId: id, cuota: c.numero, creadoEn: ahora }
   })
@@ -626,9 +653,10 @@ export function editarPrestamo(id, datos) {
   const montoCuota = nuevas.some((r) => r.estado !== 'Pagado') ? datos.montoCuota : actual.montoCuota
   // Si la primera cuota ya se pagó, su fecha es histórica: se conserva. La fecha editada es la de la primera pendiente.
   const primeraFecha = cuotaUnoPagada ? actual.primeraFecha : datos.primeraFecha
-  const prestamo = { ...actual, entidad, numCuotas: datos.numCuotas, montoCuota, primeraFecha, montoTotal: total }
+  const prestamo = { ...actual, entidad, titular, numCuotas: datos.numCuotas, montoCuota, primeraFecha, montoTotal: total }
   const cambios = []
   if (actual.entidad !== prestamo.entidad) cambios.push(`el banco de ${actual.entidad} a ${prestamo.entidad}`)
+  if ((actual.titular ?? '') !== (prestamo.titular ?? '')) cambios.push(`el titular de ${actual.titular ?? 'sin titular'} a ${prestamo.titular ?? 'sin titular'}`)
   if (actual.numCuotas !== prestamo.numCuotas) cambios.push(`las cuotas de ${actual.numCuotas} a ${prestamo.numCuotas}`)
   if (Math.abs(actual.montoCuota - prestamo.montoCuota) > 0.005) cambios.push(`el monto de cuota de ${formatoSoles(actual.montoCuota)} a ${formatoSoles(prestamo.montoCuota)}`)
   if (actual.primeraFecha !== prestamo.primeraFecha) cambios.push(`la primera fecha de ${formatoFecha(actual.primeraFecha)} a ${formatoFecha(prestamo.primeraFecha)}`)

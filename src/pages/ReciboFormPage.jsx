@@ -3,20 +3,12 @@ import { useState } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, AlertTriangle } from 'lucide-react'
 import { Boton, Campo, Chip, Tarjeta, Ventana, claseInput } from '../components/ui'
-import { TIPOS, LIMITE_MONTO, NOMBRE_MIN, NOMBRE_MAX, DIAS_MAXIMOS_RECIBO } from '../config/constantes'
+import { TIPOS, LIMITE_MONTO, NOMBRE_MIN, NOMBRE_MAX, DIAS_MAXIMOS_RECIBO, CODIGO_MAX } from '../config/constantes'
 import { buscarDuplicado, crearRecibo, editarRecibo, motivoRechazo, obtenerRecibo } from '../data/store'
 import { useDatos } from '../data/useDatos'
 import { formatoFecha, hoyISO, FECHA_MINIMA, fechaMaximaRecibo, fechaEnRango } from '../utils/fechas'
 import { formatoSoles, leerMonto } from '../utils/dinero'
-import { soloLetras, soloLetrasNumeros, soloMontoCuota, soloCodigo, soloDigitos, soloAlfanumerico, codigoValido, limpiarNombre, errorDeRuc } from '../utils/validacion'
-
-// Cada tipo de recibo tiene su propio formato de código.
-function limpiarCodigoDe(tipo, texto) {
-  if (tipo === 'Servicio') return soloDigitos(texto).slice(0, 13)
-  if (tipo === 'Impuesto') return soloDigitos(texto).slice(0, 4)
-  if (tipo === 'Proveedor') return soloAlfanumerico(texto).slice(0, 10)
-  return soloCodigo(texto)
-}
+import { soloLetras, soloLetrasNumeros, soloMontoCuota, soloCodigo, codigoValido, limpiarNombre, errorDeRuc } from '../utils/validacion'
 
 export default function ReciboFormPage() {
   const { id } = useParams()
@@ -40,6 +32,7 @@ export default function ReciboFormPage() {
   // Al crear un recibo se empieza con Servicio para que el código aplique su límite desde el inicio.
   const [tipo, setTipo] = useState(original?.tipo ?? 'Servicio')
   const [empresa, setEmpresa] = useState(original?.empresa ?? '')
+  const [titular, setTitular] = useState(original?.titular ?? '')
   const [codigo, setCodigo] = useState(original?.codigo ?? '')
   const [fecha, setFecha] = useState(() => {
     if (original) return original.fechaLimite
@@ -62,13 +55,7 @@ export default function ReciboFormPage() {
     : 'Solo letras y signos de nombre. No se permiten números.'
   const limpiarEmpresa = esProveedor ? soloLetrasNumeros : soloLetras
 
-  const ayudaCodigo = esProveedor
-    ? 'Exactamente 10 caracteres: letras y números. No se puede repetir.'
-    : tipo === 'Servicio'
-      ? 'Entre 8 y 13 dígitos, solo números. No se puede repetir.'
-      : esImpuesto
-        ? 'Exactamente 4 dígitos, solo números. No se puede repetir.'
-        : 'Elige el tipo de recibo para validar el formato.'
+  const ayudaCodigo = `Hasta ${CODIGO_MAX} caracteres: letras, números y - _ / . No se puede repetir.`
   const placeholderCodigo = esProveedor ? 'Ej.: F001000231' : esImpuesto ? 'Ej.: 0621' : 'Ej.: 20250412'
 
   // Las cuotas de préstamo y los recibos pagados no se editan; tampoco uno que otro dispositivo ya pagó o eliminó
@@ -105,13 +92,14 @@ export default function ReciboFormPage() {
     else if (!/[a-zA-Z0-9áéíóúÁÉÍÓÚñÑüÜ]/.test(nombreEmpresa)) e.empresa = 'Escribe un nombre válido.'
     else if (nombreEmpresa.length < NOMBRE_MIN) e.empresa = `El nombre debe tener al menos ${NOMBRE_MIN} caracteres.`
     else if (esProveedor && errorDeRuc(nombreEmpresa)) e.empresa = errorDeRuc(nombreEmpresa)
+    // Un recibo antiguo sin titular puede seguir sin él; uno nuevo (o que ya lo tiene) lo necesita
+    const nombreTitular = limpiarNombre(titular)
+    if (!nombreTitular) {
+      if (!editando || original.titular) e.titular = 'Escribe el nombre del titular.'
+    } else if (nombreTitular.length < NOMBRE_MIN) e.titular = `El nombre del titular debe tener al menos ${NOMBRE_MIN} caracteres.`
     if (!codigo.trim()) e.codigo = 'Escribe el código del recibo.'
-    else if (!codigoValido(tipo, codigo)) {
-      if (tipo === 'Servicio') e.codigo = 'El código de Servicio debe tener entre 8 y 13 dígitos.'
-      else if (esImpuesto) e.codigo = 'El código de Impuesto debe tener exactamente 4 dígitos.'
-      else if (esProveedor) e.codigo = 'El código de Proveedor debe tener exactamente 10 letras o números.'
-      else e.codigo = 'Escribe un código válido.'
-    }
+    else if (codigo.trim().length > CODIGO_MAX) e.codigo = `El código no puede tener más de ${CODIGO_MAX} caracteres.`
+    else if (!codigoValido(codigo)) e.codigo = 'Escribe un código válido: letras, números y - _ / .'
     if (!fecha) e.fecha = 'Elige la fecha límite de pago.'
     else if (!fechaEnRango(fecha, fechaMinima, fechaMax) && !(editando && fecha === original.fechaLimite)) {
       e.fecha = `La fecha límite debe estar entre el ${formatoFecha(fechaMinima)} y el ${formatoFecha(fechaMax)} (hoy + ${DIAS_MAXIMOS_RECIBO} días).`
@@ -142,6 +130,7 @@ export default function ReciboFormPage() {
     const datos = {
       tipo,
       empresa,
+      titular,
       codigo,
       fechaLimite: fecha,
       monto: leerMonto(monto),
@@ -211,14 +200,25 @@ export default function ReciboFormPage() {
             className={claseInput(errores.empresa)}
           />
         </Campo>
+        <Campo etiqueta="Nombre del titular" id="f-titular" error={errores.titular} ayuda="Persona o empresa a cuyo nombre está el recibo. Solo letras.">
+          <input
+            id="f-titular"
+            autoComplete="off"
+            maxLength={NOMBRE_MAX}
+            value={titular}
+            onChange={(e) => setTitular(soloLetras(e.target.value))}
+            onBlur={() => setTitular(limpiarNombre(titular))} // un solo espacio entre palabras
+            placeholder="Ej.: Juan Pérez Castillo"
+            className={claseInput(errores.titular)}
+          />
+        </Campo>
         <Campo etiqueta="Código del recibo" id="f-codigo" error={errores.codigo} ayuda={ayudaCodigo}>
           <input
             id="f-codigo"
             autoComplete="off"
-            inputMode={tipo === 'Servicio' || esImpuesto ? 'numeric' : 'text'}
-            maxLength={esImpuesto ? 4 : tipo === 'Servicio' ? 13 : esProveedor ? 10 : undefined}
+            maxLength={CODIGO_MAX}
             value={codigo}
-            onChange={(e) => setCodigo(limpiarCodigoDe(tipo, e.target.value))}
+            onChange={(e) => setCodigo(soloCodigo(e.target.value).slice(0, CODIGO_MAX))}
             placeholder={placeholderCodigo}
             className={claseInput(errores.codigo)}
           />
