@@ -60,14 +60,9 @@ export async function iniciarDatos() {
     try {
       const d = await conTiempo(leerNube(), ESPERA_CARGA_MS)
       confirmarVersiones(d)
-      if (d.recibos.length + d.prestamos.length + d.historial.length === 0) {
-        // Base vacía: primer arranque, se cargan los datos de ejemplo
-        const ejemplo = crearDatosEjemplo()
-        estado = { seq: 0, recibos: [], prestamos: [], historial: [] }
-        publicar(ejemplo)
-      } else {
-        estado = { seq: 0, ...d }
-      }
+      // Una base vacía se queda vacía: los datos de ejemplo solo se usan sin Supabase (modo local).
+      // Antes se volvían a crear solos cada vez que se borraba todo, y el préstamo de ejemplo reaparecía.
+      estado = { seq: 0, ...d }
       // Se refresca la copia local para que, si Supabase no responde, no vuelvan
       // a aparecer datos antiguos.
       guardarLocal(estado)

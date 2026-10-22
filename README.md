@@ -31,7 +31,7 @@ Los PIN están en `src/config/pins.js` como hash SHA-256 (`SHA-256("pagos-castil
 src/
   config/      pins.js (hashes), constantes.js (tipos, medios, zona horaria, topes de monto)
   data/        store.js (TODA la lógica de datos, reglas e historial), persistencia.js (Supabase),
-               seed.js (datos de ejemplo para una base vacía), useDatos.js
+               seed.js (datos de ejemplo solo en modo local, sin Supabase), useDatos.js
   utils/       fechas.js (fechas locales de Lima), dinero.js (S/ 1,250.00), estado.js, avisos.js,
                validacion.js (formatos de código y texto), prestamos.js (mora/interés), imagen.js (fotos),
                actualizacion.js (recarga si hay versión nueva), hash.js
